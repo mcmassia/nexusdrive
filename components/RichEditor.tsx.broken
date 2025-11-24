@@ -1,0 +1,652 @@
+import React, { useRef, useEffect, useState } from 'react';
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table } from 'lucide-react';
+import { db } from '../services/db';
+import { NexusObject, NexusType } from '../types';
+
+interface RichEditorProps {
+  initialContent: string;
+  onChange: (html: string) => void;
+  onMentionClick?: (objectId: string) => void;
+  allObjects?: NexusObject[];
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMentionClick, allObjects, className = '', style = {} }) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isComposing = useRef(false);
+
+  // Menu State
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuType, setMenuType] = useState<'mention' | 'tag' | null>(null); // '@' or '#'
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [query, setQuery] = useState('');
+
+  const [mentionResults, setMentionResults] = useState<NexusObject[]>([]);
+  const [tagResults, setTagResults] = useState<string[]>([]);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isUserEditing, setIsUserEditing] = useState(false);
+
+  // Parse natural date expressions
+  const parseDateExpression = (expr: string): NexusObject | null => {
+    const today = new Date();
+    let targetDate: Date | null = null;
+    let title = '';
+
+    switch (expr) {
+      case 'hoy':
+      case 'today':
+        targetDate = today;
+        title = `Daily Note: ${today.toISOString().split('T')[0]}`;
+        break;
+      case 'ayer':
+      case 'yesterday':
+        targetDate = new Date(today);
+        targetDate.setDate(today.getDate() - 1);
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        break;
+      case 'mañana':
+      case 'tomorrow':
+        targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + 1);
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        break;
+      case 'anteayer':
+        targetDate = new Date(today);
+        targetDate.setDate(today.getDate() - 2);
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        break;
+      case 'pasado mañana':
+        targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + 2);
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        break;
+    }
+
+    if (targetDate) {
+      return {
+        id: `daily-${targetDate.toISOString().split('T')[0]}`,
+        title,
+        type: NexusType.PAGE,
+        content: `<h1>Daily Log: ${targetDate.toISOString().split('T')[0]}</h1><p>What's on your mind today?</p>`,
+        lastModified: targetDate,
+        tags: ['daily-journal'],
+        metadata: [{ key: 'date', label: 'Date', value: targetDate.toISOString().split('T')[0], type: 'date' }]
+      };
+    }
+
+    return null;
+  };
+
+  // Only update content if significantly different AND user is not actively editing
+  useEffect(() => {
+    if (isUserEditing) {
+      // Don't update while user is typing
+      return;
+    }
+
+    if (editorRef.current && initialContent && editorRef.current.innerHTML !== initialContent) {
+      // Only update if there's a significant difference (not just formatting changes)
+      const currentLength = editorRef.current.innerHTML.length;
+      const newLength = initialContent.length;
+
+      // Update if content is very different or empty
+      if (currentLength === 0 || Math.abs(currentLength - newLength) > 100) {
+        editorRef.current.innerHTML = initialContent;
+      }
+    }
+  }, [initialContent, isUserEditing]);
+
+  title: query,
+    type: NexusType.PAGE,
+      content: '',
+        lastModified: new Date(),
+          tags: [],
+            metadata: []
+};
+setMentionResults([createOption, ...filtered]);
+setSelectedIndex(0);
+        };
+fetchResults();
+      } else if (menuType === 'tag') {
+}
+    }
+  }, [query, menuOpen, menuType]);
+
+// Handle clicks on mentions to open documents
+useEffect(() => {
+  const handleMentionClick = async (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('nexus-mention')) {
+      e.preventDefault();
+      const mentionId = target.getAttribute('data-mention-id');
+      if (mentionId && onMentionClick) {
+        onMentionClick(mentionId);
+      }
+    }
+  };
+
+  const editor = editorRef.current;
+  if (editor) {
+    editor.addEventListener('click', handleMentionClick as EventListener);
+    return () => {
+      editor.removeEventListener('click', handleMentionClick as EventListener);
+    };
+  }
+}, [onMentionClick]);
+
+const exec = (command: string, value: string | undefined = undefined) => {
+  document.execCommand(command, false, value);
+  editorRef.current?.focus();
+  handleInput();
+};
+
+const handleInput = () => {
+  setIsUserEditing(true);
+  if (editorRef.current) {
+    onChange(editorRef.current.innerHTML);
+  }
+
+  // Reset editing flag after a delay
+  setTimeout(() => {
+    setIsUserEditing(false);
+  }, 2000);
+};
+
+const getCaretCoordinates = () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return { top: 0, left: 0 };
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(false);
+  const rect = range.getClientRects()[0];
+  if (rect) {
+    return {
+      top: rect.top + window.scrollY + 20,
+      left: rect.left + window.scrollX
+    };
+  }
+  return { top: 0, left: 0 };
+};
+
+const handleKeyDown = (e: React.KeyboardEvent) => {
+  if (menuOpen) {
+    const resultsLen = menuType === 'mention' ? mentionResults.length : tagResults.length;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev + 1) % resultsLen);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev - 1 + resultsLen) % resultsLen);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (menuType === 'mention' && mentionResults[selectedIndex]) {
+        insertMention(mentionResults[selectedIndex]);
+      } else if (menuType === 'tag' && tagResults[selectedIndex]) {
+        insertTag(tagResults[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setMenuOpen(false);
+    }
+  }
+
+  if (e.key === '@' || e.key === '#') {
+    setTimeout(() => {
+      const coords = getCaretCoordinates();
+      setMenuPosition(coords);
+      setMenuOpen(true);
+      setMenuType(e.key === '@' ? 'mention' : 'tag');
+      setQuery('');
+      setSelectedIndex(0);
+    }, 0);
+  }
+};
+
+const handleKeyUp = (e: React.KeyboardEvent) => {
+  if (menuOpen && e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') {
+    const selection = window.getSelection();
+    if (selection && selection.anchorNode) {
+      const text = selection.anchorNode.textContent || '';
+      const char = menuType === 'mention' ? '@' : '#';
+      const lastIndex = text.lastIndexOf(char);
+      if (lastIndex !== -1) {
+        // Verify no spaces after char
+        const q = text.substring(lastIndex + 1);
+        if (!q.includes(' ')) {
+          setQuery(q);
+          return;
+        }
+      }
+      setMenuOpen(false);
+    }
+  }
+};
+
+const insertMention = async (obj: NexusObject) => {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = selection.getRangeAt(0);
+  const textNode = range.startContainer;
+
+  // Remove the @ and query text
+  if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+    const text = textNode.textContent;
+    const lastAt = text.lastIndexOf('@');
+    if (lastAt !== -1) {
+      textNode.textContent = text.substring(0, lastAt);
+      const newRange = document.createRange();
+      newRange.setStart(textNode, textNode.textContent.length);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+  }
+
+  // Handle creating new object if it doesn't exist
+  if (obj.id === '__CREATE_NEW__') {
+    // Parse query for type: "personas/Adelina" or just "Adelina"
+    const queryParts = query.split('/');
+    let objectType = NexusType.PAGE; // Default
+    let objectTitle = query;
+
+    if (queryParts.length === 2) {
+      // Type specified: personas/Adelina
+      const typeString = queryParts[0].toLowerCase();
+      objectTitle = queryParts[1];
+
+      // Map Spanish/English type names to NexusType
+      const typeMap: Record<string, NexusType> = {
+        'personas': NexusType.PERSON,
+        'people': NexusType.PERSON,
+        'person': NexusType.PERSON,
+        'pages': NexusType.PAGE,
+        'page': NexusType.PAGE,
+        'meetings': NexusType.MEETING,
+        'meeting': NexusType.MEETING,
+        'reuniones': NexusType.MEETING,
+        'projects': NexusType.PROJECT,
+        'project': NexusType.PROJECT,
+        'proyectos': NexusType.PROJECT
+      };
+
+      objectType = typeMap[typeString] || NexusType.PAGE;
+    }
+
+    // Create new object
+    const newObj: NexusObject = {
+      id: Date.now().toString(),
+      title: objectTitle,
+      type: objectType,
+      content: '',
+      lastModified: new Date(),
+      tags: [],
+      metadata: []
+    };
+
+    await db.saveObject(newObj);
+    obj = newObj; // Replace with the created object
+  }
+
+  // Insert mention WITHOUT @ symbol, make it clickable
+  const html = `<span data-mention-id="${obj.id}" class="nexus-mention text-blue-600 dark:text-blue-400 font-medium hover:underline bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer" contenteditable="false">${obj.title}</span>&nbsp;`;
+  document.execCommand('insertHTML', false, html);
+
+  setMenuOpen(false);
+  handleInput();
+};
+
+const insertTag = (tag: string) => {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = selection.getRangeAt(0);
+  const textNode = range.startContainer;
+
+  if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+    const text = textNode.textContent;
+    const lastHash = text.lastIndexOf('#');
+    if (lastHash !== -1) {
+      textNode.textContent = text.substring(0, lastHash);
+      const newRange = document.createRange();
+      newRange.setStart(textNode, textNode.textContent.length);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+  }
+
+  const html = `<span class="nexus-tag">#${tag}</span>&nbsp;`;
+  document.execCommand('insertHTML', false, html);
+
+  setMenuOpen(false);
+  handleInput();
+};
+
+const insertTable = () => {
+  const rows = prompt('Number of rows:', '3');
+  const cols = prompt('Number of columns:', '3');
+
+  if (!rows || !cols) return;
+
+  const numRows = parseInt(rows);
+  const numCols = parseInt(cols);
+
+  if (isNaN(numRows) || isNaN(numCols) || numRows < 1 || numCols < 1) {
+    alert('Please enter valid numbers for rows and columns');
+    return;
+  }
+
+  let tableHTML = '<table border="1" style="border-collapse: collapse; width: 100%; margin: 10px 0;">\n';
+
+  for (let i = 0; i < numRows; i++) {
+    tableHTML += '  <tr>\n';
+    for (let j = 0; j < numCols; j++) {
+      const cellStyle = 'border: 1px solid #ddd; padding: 8px; min-width: 100px;';
+      tableHTML += `    <td style="${cellStyle}"><br></td>\n`;
+    }
+    tableHTML += '  </tr>\n';
+  }
+
+  tableHTML += '</table><p><br></p>';
+
+  document.execCommand('insertHTML', false, tableHTML);
+  editorRef.current?.focus();
+  handleInput();
+};
+
+const handleClick = (e: React.MouseEvent) => {
+  const target = e.target as HTMLElement;
+
+  // Check if clicked on an image
+  if (target.tagName === 'IMG') {
+    setSelectedImage(target as HTMLImageElement);
+  } else {
+    setSelectedImage(null);
+  }
+};
+
+const handlePaste = (e: React.ClipboardEvent) => {
+  // Get clipboard data
+  const clipboardData = e.clipboardData;
+
+  // Check for image
+  const items = clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      e.preventDefault();
+
+      const blob = items[i].getAsFile();
+      if (blob) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = document.createElement('img');
+          img.src = event.target?.result as string;
+          img.style.maxWidth = '100%';
+          img.style.cursor = 'pointer';
+          img.style.border = '2px solid transparent';
+          img.classList.add('editor-image');
+
+          // Insert at cursor
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+            range.collapse(false);
+          }
+
+          handleInput();
+        };
+        reader.readAsDataURL(blob);
+      }
+      break;
+    }
+  }
+};
+
+const resizeImage = (size: 'small' | 'medium' | 'large' | 'full') => {
+  if (!selectedImage) return;
+
+  switch (size) {
+    case 'small':
+      selectedImage.style.width = '25%';
+      break;
+    case 'medium':
+      selectedImage.style.width = '50%';
+      break;
+    case 'large':
+      selectedImage.style.width = '75%';
+      break;
+    case 'full':
+      selectedImage.style.width = '100%';
+      break;
+  }
+
+  handleInput();
+};
+
+const ToolbarBtn = ({ icon: Icon, cmd, arg, title }: any) => (
+  <button
+    onMouseDown={(e) => { e.preventDefault(); exec(cmd, arg); }}
+    className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+    title={title}
+  >
+    <Icon size={16} />
+  </button>
+);
+
+return (
+  <div className="flex flex-col h-full border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-colors relative">
+    {/* Enhanced Toolbar */}
+    <div className="flex items-center gap-1 p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex-wrap">
+      {/* Font Size */}
+      <select
+        onChange={(e) => exec('fontSize', e.target.value)}
+        defaultValue="3"
+        className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-blue-400 transition-colors"
+        title="Font Size"
+      >
+        <option value="1">Small</option>
+        <option value="3">Normal</option>
+        <option value="4">Medium</option>
+        <option value="5">Large</option>
+        <option value="6">Huge</option>
+      </select>
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Headings */}
+      <ToolbarBtn icon={Heading1} cmd="formatBlock" arg="H1" title="Heading 1" />
+      <ToolbarBtn icon={Heading2} cmd="formatBlock" arg="H2" title="Heading 2" />
+      <ToolbarBtn icon={Heading3} cmd="formatBlock" arg="H3" title="Heading 3" />
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Text Formatting */}
+      <ToolbarBtn icon={Bold} cmd="bold" title="Bold (Cmd+B)" />
+      <ToolbarBtn icon={Italic} cmd="italic" title="Italic (Cmd+I)" />
+      <ToolbarBtn icon={Underline} cmd="underline" title="Underline (Cmd+U)" />
+      <ToolbarBtn icon={Strikethrough} cmd="strikeThrough" title="Strikethrough" />
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Text Color */}
+      <button
+        onMouseDown={(e) => { e.preventDefault(); }}
+        onClick={() => {
+          const color = prompt('Enter color (e.g., #FF0000 or red):');
+          if (color) exec('foreColor', color);
+        }}
+        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+        title="Text Color"
+      >
+        <Palette size={16} />
+      </button>
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Lists */}
+      <ToolbarBtn icon={List} cmd="insertUnorderedList" title="Bullet List" />
+      <ToolbarBtn icon={ListOrdered} cmd="insertOrderedList" title="Numbered List" />
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Alignment */}
+      <ToolbarBtn icon={AlignLeft} cmd="justifyLeft" title="Align Left" />
+      <ToolbarBtn icon={AlignCenter} cmd="justifyCenter" title="Align Center" />
+      <ToolbarBtn icon={AlignRight} cmd="justifyRight" title="Align Right" />
+      <ToolbarBtn icon={AlignJustify} cmd="justifyFull" title="Justify" />
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Other Formatting */}
+      <ToolbarBtn icon={Quote} cmd="formatBlock" arg="BLOCKQUOTE" title="Quote" />
+      <ToolbarBtn icon={Code} cmd="formatBlock" arg="PRE" title="Code Block" />
+
+      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+      {/* Insert Link */}
+      <button
+        onMouseDown={(e) => { e.preventDefault(); }}
+        onClick={() => {
+          const url = prompt('Enter URL:');
+          if (url) exec('createLink', url);
+        }}
+        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+        title="Insert Link"
+      >
+        <Link size={16} />
+      </button>
+
+      {/* Insert Table */}
+      <button
+        onMouseDown={(e) => { e.preventDefault(); }}
+        onClick={insertTable}
+        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+        title="Insert Table"
+      >
+        <Table size={16} />
+      </button>
+
+      {/* Image Resize (only show when image is selected) */}
+      {selectedImage && (
+        <>
+          <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+          <span className="text-xs text-slate-500 px-2">Image Size:</span>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); }}
+            onClick={() => resizeImage('small')}
+            className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+            title="25% width"
+          >
+            25%
+          </button>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); }}
+            onClick={() => resizeImage('medium')}
+            className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+            title="50% width"
+          >
+            50%
+          </button>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); }}
+            onClick={() => resizeImage('large')}
+            className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+            title="75% width"
+          >
+            75%
+          </button>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); }}
+            onClick={() => resizeImage('full')}
+            className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+            title="100% width"
+          >
+            100%
+          </button>
+        </>
+      )}
+    </div>
+
+    {/* Editor Area */}
+    <div
+      ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={handleInput}
+      onCompositionStart={() => isComposing.current = true}
+      onCompositionEnd={() => isComposing.current = false}
+      onClick={handleClick}
+      className={`flex-1 px-8 py-6 overflow-y-auto focus:outline-none prose prose-slate dark:prose-invert max-w-none ${className}`}
+      placeholder="Start typing... Use '@' to mention or '#' to tag"
+      style={{ minHeight: '500px' }}
+    />
+
+    {/* Floating Menu (Shared for @ and #) */}
+    {menuOpen && (
+      <div
+        className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg w-64 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100"
+        style={{ top: menuPosition.top, left: menuPosition.left }}
+      >
+        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-500 uppercase">
+          {menuType === 'mention' ? 'Link to...' : 'Tag...'}
+        </div>
+        <div className="max-h-48 overflow-y-auto p-1 no-scrollbar">
+          {menuType === 'mention' && (
+            <div className="p-1">
+              {mentionResults.length === 0 && (
+                <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
+              )}
+              {mentionResults.map((obj, i) => (
+                <button
+                  key={obj.id}
+                  onClick={() => insertMention(obj)}
+                  className={`w-full text-left px-3 py-2 rounded text-sm flex items-center gap-2 ${i === selectedIndex
+                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                >
+                  {obj.id === '__CREATE_NEW__' ? (
+                    <>
+                      <span className="text-green-600 dark:text-green-400 font-semibold">+ Create:</span>
+                      <span className="font-medium">{obj.title}</span>
+                      <span className="text-xs text-slate-400 ml-auto">
+                        {obj.title.includes('/') ? '(with type)' : '(Page)'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-slate-500">@</span>
+                      <span>{obj.title}</span>
+                      <span className="text-xs text-slate-400 ml-auto">{obj.type}</span>
+                    </>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {menuType === 'tag' && (
+            tagResults.length > 0 ? (
+              tagResults.map((tag, i) => (
+                <button
+                  key={tag}
+                  onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
+                  className={`w-full text-left px-3 py-2 text-sm rounded flex items-center gap-2 ${i === selectedIndex ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  <Hash size={12} className="opacity-50" />
+                  <span className="truncate">{tag}</span>
+                </button>
+              ))
+            ) : <div className="p-2 text-xs text-slate-400 italic text-center">Type to create tag</div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+);
+};
+
+export default RichEditor;

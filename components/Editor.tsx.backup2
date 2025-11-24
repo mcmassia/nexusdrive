@@ -1,0 +1,294 @@
+import React, { useState, useEffect } from 'react';
+import { NexusObject } from '../types';
+import MetadataTable from './MetadataTable';
+import RichEditor from './RichEditor';
+import { Save, Sparkles, Trash2, ChevronDown, X, FileText, Link, Info } from 'lucide-react';
+import { db } from '../services/db';
+import { geminiService } from '../services/geminiService';
+import { TRANSLATIONS } from '../constants';
+
+interface EditorProps {
+    object: NexusObject;
+    onClose: () => void;
+    onSave: (obj: NexusObject) => void;
+    onNavigateToDocuments?: (filterType?: string) => void;
+    lang: 'en' | 'es';
+}
+
+const Editor: React.FC<EditorProps> = ({ object, onClose, onSave, onNavigateToDocuments, lang }) => {
+    const [currentObject, setCurrentObject] = useState<NexusObject>(object);
+    const [content, setContent] = useState(object.content);
+    const [isSaving, setIsSaving] = useState(false);
+    const [backlinks, setBacklinks] = useState<string[]>([]);
+
+    const t = TRANSLATIONS[lang];
+
+    useEffect(() => {
+        setCurrentObject(object);
+        setContent(object.content);
+    }, [object.id]);
+
+    useEffect(() => {
+        const fetchBacklinks = async () => {
+            const { links } = await db.getGraphData();
+            const sources = links
+                .filter(l => (typeof l.target === 'object' ? l.target.id : l.target) === currentObject.id)
+                .map(l => (typeof l.source === 'object' ? l.source.title : l.source));
+            setBacklinks(sources as string[]);
+        };
+        fetchBacklinks();
+    }, [currentObject.id]);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+
+        // Extract Hashtags from content
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const tags = Array.from(tempDiv.querySelectorAll('.nexus-tag')).map(el => el.textContent?.replace('#', '') || '');
+        const uniqueTags = Array.from(new Set([...currentObject.tags, ...tags.filter(t => t)]));
+
+        const updated = { ...currentObject, content, lastModified: new Date(), tags: uniqueTags };
+        await db.saveObject(updated);
+        onSave(updated);
+        setCurrentObject(updated);
+        setTimeout(() => setIsSaving(false), 500);
+    };
+
+    const handleAutoTag = async () => {
+        if (!content || content.trim().length === 0) {
+            alert(lang === 'es' ? 'Escribe algo de contenido primero' : 'Write some content first');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const plainText = content.replace(/<[^>]*>?/gm, ' ');
+            console.log('[Editor] Calling autoTagContent with:', plainText.substring(0, 100) + '...');
+            const newTags = await geminiService.autoTagContent(plainText);
+            console.log('[Editor] Received tags:', newTags);
+
+            if (newTags.length > 0) {
+                setCurrentObject(prev => ({ ...prev, tags: [...new Set([...prev.tags, ...newTags])] }));
+                alert(lang === 'es'
+                    ? `✅ ${newTags.length} etiquetas sugeridas agregadas`
+                    : `✅ ${newTags.length} suggested tags added`);
+            } else {
+                alert(lang === 'es' ? 'No se pudieron generar etiquetas' : 'Could not generate tags');
+            }
+        } catch (error) {
+            console.error('[Editor] Auto-tag error:', error);
+            alert(lang === 'es' ? 'Error al generar etiquetas' : 'Error generating tags');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        const confirmDelete = window.confirm(
+            `¿Estás seguro de que quieres eliminar "${currentObject.title}"?\n\nEsta acción no se puede deshacer.`
+        );
+
+        if (!confirmDelete) return;
+
+        setIsSaving(true);
+        try {
+            await db.deleteObject(currentObject.id);
+
+            // Just close the editor - parent will refresh automatically
+            onClose();
+        } catch (error) {
+            console.error('Failed to delete object:', error);
+            alert('Error al eliminar el documento. Por favor, intenta de nuevo.');
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right-10 duration-200 transition-colors">
+            {/* Toolbar */}
+            <div className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">/ Nexus /</span>
+                    <button
+                        onClick={() => onNavigateToDocuments?.(currentObject.type)}
+                        className="text-sm text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                    >
+                        {currentObject.type}s
+                    </button>
+                    <span className="text-sm text-slate-400">/</span>
+                    <input
+                        value={currentObject.title}
+                        onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
+                        className="font-semibold text-slate-800 dark:text-slate-100 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
+                    />
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">{isSaving ? t.saving : t.synced}</span>
+                    <button onClick={handleAutoTag} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors" title="AI Auto-Tag">
+                        <div className="flex-1 flex bg-white dark:bg-slate-900 overflow-hidden">
+                            {/* Main Content Area */}
+                            <div className="flex-1 flex flex-col overflow-hidden">
+                                {/* Header */}
+                                <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={onClose}
+                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                        >
+                                            <X size={20} className="text-slate-600 dark:text-slate-400" />
+                                        </button>
+                                        <input
+                                            value={currentObject.title}
+                                            onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
+                                            className="text-xl font-semibold text-slate-900 dark:text-slate-100 outline-none bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded transition-colors"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleAutoTag} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors" title="AI Auto-Tag">
+                                            <Sparkles size={18} />
+                                        </button>
+                                        <button
+                                            onClick={handleSave}
+                                            disabled={saving}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                        >
+                                            {saving ? (
+                                                <>
+                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    {t.saving}...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save size={16} />
+                                                    {t.save}
+                                                </>
+                                            )}
+                                        </button>
+                                        <button onClick={handleDelete} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}>
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Editor Content */}
+                                <div className="flex-1 overflow-auto p-6">
+                                    <RichEditor
+                                        initialContent={content}
+                                        onChange={handleContentChange}
+                                        className="prose dark:prose-invert max-w-none !text-slate-900 dark:!text-white [&_*]:!text-slate-900 [&_*]:dark:!text-white"
+                                        onMentionClick={async (objectId) => {
+                                            // Open the mentioned document
+                                            const obj = await db.getObjectById(objectId);
+                                            if (obj) {
+                                                // Save current document first
+                                                await handleSave();
+                                                // Then notify parent to open the new one
+                                                onObjectSelect(obj);
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Metadata Panel (collapsible at bottom) */}
+                                <div className="border-t border-slate-200 dark:border-slate-700">
+                                    <button
+                                        onClick={() => setShowMetadata(!showMetadata)}
+                                        className="w-full px-6 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                    >
+                                        <span className="font-medium text-slate-700 dark:text-slate-300">{t.metadata}</span>
+                                        <ChevronDown
+                                            size={20}
+                                            className={`text-slate-500 transition-transform ${showMetadata ? 'rotate-180' : ''}`}
+                                        />
+                                    </button>
+                                    {showMetadata && (
+                                        <div className="p-6 bg-slate-50 dark:bg-slate-800/50 max-h-64 overflow-y-auto">
+                                            <MetadataTable
+                                                object={currentObject} // Changed to pass the whole object
+                                                onChange={handleMetadataChange}
+                                                allObjects={allObjects}
+                                                onTagRemove={(tag) => {
+                                                    const newTags = currentObject.tags.filter(t => t !== tag);
+                                                    setCurrentObject({ ...currentObject, tags: newTags });
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Sidebar - References & Context */}
+                            <div className="w-80 border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+                                {/* References Section */}
+                                <div className="flex-1 flex flex-col overflow-hidden">
+                                    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+                                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                            <Link size={16} className="text-blue-600 dark:text-blue-400" />
+                                            {t.linkedRefs}
+                                        </h3>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-4">
+                                        {incomingReferences.length === 0 ? (
+                                            <p className="text-sm text-slate-500 dark:text-slate-400">{t.noBacklinks}</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {incomingReferences.map((ref) => (
+                                                    <div
+                                                        key={ref.id}
+                                                        className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer transition-colors"
+                                                        onClick={() => onObjectSelect(ref)}
+                                                    >
+                                                        <div className="flex items-start gap-3">
+                                                            <FileText size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                                                                    {ref.title}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                                    {ref.type}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Context Section */}
+                                <div className="border-t border-slate-200 dark:border-slate-700">
+                                    <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/30">
+                                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 text-sm">
+                                            <Info size={16} className="text-slate-600 dark:text-slate-400" />
+                                            {t.context}
+                                        </h3>
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div>
+                                            <h4 className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">{t.created}</h4>
+                                            <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                {new Date(currentObject.createdAt || currentObject.lastModified).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">{t.path}</h4>
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 font-mono break-all">
+                                                {`/My Drive/Nexus/${currentObject.type}s/`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        );
+};
+
+                        export default Editor;

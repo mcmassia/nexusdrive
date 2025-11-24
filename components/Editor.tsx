@@ -1,0 +1,260 @@
+import React, { useState, useEffect } from 'react';
+import { NexusObject, NexusType, TypeSchema } from '../types';
+import MetadataTable from './MetadataTable';
+import RichEditor from './RichEditor';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag } from 'lucide-react';
+import { db } from '../services/db';
+import { geminiService } from '../services/geminiService';
+import { TRANSLATIONS } from '../constants';
+
+interface EditorProps {
+    object: NexusObject;
+    onSave: (obj: NexusObject) => void;
+    onClose: () => void; // Changed from onBack to match App.tsx
+    onDelete?: (id: string) => void; // Made optional as it's not passed from App.tsx yet
+    objects?: NexusObject[]; // Made optional
+    lang: 'en' | 'es';
+    onNavigateToDocuments?: (filterType?: string) => void;
+}
+
+const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments }) => {
+    const t = TRANSLATIONS[lang];
+    const [currentObject, setCurrentObject] = useState<NexusObject>(object);
+    const [content, setContent] = useState(object.content);
+    const [isSaving, setIsSaving] = useState(false);
+    const [typeSchema, setTypeSchema] = useState<TypeSchema | undefined>(undefined);
+    const [backlinks, setBacklinks] = useState<string[]>([]);
+    const [objects, setObjects] = useState<NexusObject[]>([]);
+
+    useEffect(() => {
+        setCurrentObject(object);
+        setContent(object.content);
+    }, [object.id]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            // Fetch all objects first to resolve titles
+            const allObjects = await db.getObjects();
+            setObjects(allObjects);
+
+            // Fetch schema for the object type
+            const schema = await db.getTypeSchema(currentObject.type);
+            if (schema) {
+                setTypeSchema(schema);
+            }
+
+            // Fetch backlinks
+            const { links } = await db.getGraphData();
+            const sources = links
+                .filter(l => (typeof l.target === 'object' ? l.target.id : l.target) === currentObject.id)
+                .map(l => {
+                    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                    const sourceObj = allObjects.find(o => o.id === sourceId);
+                    return sourceObj ? sourceObj.title : sourceId;
+                });
+            setBacklinks(sources as string[]);
+        };
+        fetchData();
+    }, [currentObject.id]);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+
+        // Extract Hashtags from content
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const tags = Array.from(tempDiv.querySelectorAll('.nexus-tag')).map(el => el.textContent?.replace('#', '') || '');
+        const uniqueTags = Array.from(new Set([...currentObject.tags, ...tags.filter(t => t)]));
+
+        const updated = { ...currentObject, content, lastModified: new Date(), tags: uniqueTags };
+        await db.saveObject(updated);
+        onSave(updated);
+        setCurrentObject(updated);
+        setTimeout(() => setIsSaving(false), 500);
+    };
+
+    const handleAutoTag = async () => {
+        if (!content || content.trim().length === 0) {
+            alert(lang === 'es' ? 'Escribe algo de contenido primero' : 'Write some content first');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const plainText = content.replace(/<[^>]*>?/gm, ' ');
+            console.log('[Editor] Calling autoTagContent with:', plainText.substring(0, 100) + '...');
+            const newTags = await geminiService.autoTagContent(plainText);
+            console.log('[Editor] Received tags:', newTags);
+
+            if (newTags.length > 0) {
+                setCurrentObject(prev => ({ ...prev, tags: [...new Set([...prev.tags, ...newTags])] }));
+                alert(lang === 'es'
+                    ? `${newTags.length} etiquetas sugeridas agregadas`
+                    : `${newTags.length} suggested tags added`);
+            } else {
+                alert(lang === 'es' ? 'No se pudieron generar etiquetas' : 'Could not generate tags');
+            }
+        } catch (error) {
+            console.error('[Editor] Auto-tag error:', error);
+            alert(lang === 'es' ? 'Error al generar etiquetas' : 'Error generating tags');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!confirm(lang === 'es' ? '¿Estás seguro de que quieres eliminar este documento?' : 'Are you sure you want to delete this document?')) {
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            if (onDelete) {
+                onDelete(currentObject.id);
+            } else {
+                await db.deleteObject(currentObject.id);
+                onClose();
+            }
+        } catch (error) {
+            console.error('Failed to delete object:', error);
+            alert('Error al eliminar el documento. Por favor, intenta de nuevo.');
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right-10 duration-200 transition-colors">
+            {/* Toolbar */}
+            <div className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm text-slate-400 shrink-0">/ Nexus /</span>
+                    <button
+                        onClick={() => onNavigateToDocuments?.(currentObject.type)}
+                        className="text-sm text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0"
+                    >
+                        {currentObject.type}s
+                    </button>
+                    <span className="text-sm text-slate-400 shrink-0">/</span>
+                    <input
+                        value={currentObject.title}
+                        onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
+                        className="flex-1 min-w-0 font-semibold text-slate-800 dark:!text-white outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
+                    />
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">{isSaving ? t.saving : t.synced}</span>
+                    <button onClick={handleAutoTag} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors" title="AI Auto-Tag">
+                        <Sparkles size={18} />
+                    </button>
+                    <button onClick={handleSave} className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors">
+                        <Save size={16} /> {t.save}
+                    </button>
+                    <button onClick={handleDelete} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}>
+                        <Trash2 size={18} />
+                    </button>
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">{t.close}</button>
+                </div>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+                {/* Main Content - 95% Width */}
+                <div className="flex-1 overflow-y-auto p-8 max-w-[95%] mx-auto w-full no-scrollbar">
+
+                    <MetadataTable
+                        object={currentObject}
+                        onChange={(meta) => setCurrentObject({ ...currentObject, metadata: meta })}
+                        onTagRemove={(tag) => {
+                            const newTags = currentObject.tags.filter(t => t !== tag);
+                            setCurrentObject({ ...currentObject, tags: newTags });
+                        }}
+                        allObjects={objects}
+                        typeSchema={typeSchema}
+                        onDocumentClick={async (docId) => {
+                            const obj = await db.getObjectById(docId);
+                            if (obj) {
+                                await handleSave();
+                                onSave(obj);
+                            }
+                        }}
+                    />
+
+                    {/* Rich Editor */}
+                    <div className="min-h-[500px]">
+                        <RichEditor
+                            key={currentObject.id} // Force re-mount on object change to prevent content leakage
+                            initialContent={content}
+                            onChange={setContent}
+                            allObjects={objects}
+                            className="
+                                prose max-w-none
+                                !bg-white !text-slate-900
+                                p-8 rounded-lg shadow-sm
+                                [&_p]:!text-slate-900
+                                [&_h1]:!text-slate-900
+                                [&_h2]:!text-slate-900
+                                [&_h3]:!text-slate-900
+                                [&_li]:!text-slate-900
+                                [&_ul]:!text-slate-900
+                                [&_ol]:!text-slate-900
+                                [&_blockquote]:!text-slate-700 [&_blockquote]:!border-l-4 [&_blockquote]:!border-slate-300 [&_blockquote]:!pl-4 [&_blockquote]:!italic
+                                [&_code]:!bg-slate-100 [&_code]:!text-pink-600 [&_code]:!px-1 [&_code]:!rounded
+                                [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
+                                [&_a]:!text-blue-600 [&_a]:!underline
+                            "
+                            onMentionClick={async (objectId) => {
+                                // Open the mentioned document
+                                const obj = await db.getObjectById(objectId);
+                                if (obj) {
+                                    // Save current document first
+                                    await handleSave();
+                                    // Then notify parent to open the new one
+                                    onSave(obj);
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Sidebar: Context & Backlinks */}
+            <div className="w-64 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">{t.linkedRefs}</h3>
+                {backlinks.length > 0 ? (
+                    <ul className="space-y-3">
+                        {backlinks.map((source, i) => (
+                            <li key={i} className="text-sm bg-white dark:bg-slate-900 p-2 rounded shadow-sm border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                                <span className="font-medium text-blue-600 dark:text-blue-400 block mb-1">Linked from:</span>
+                                <button
+                                    onClick={async () => {
+                                        // Find the object by title (since backlinks currently stores titles)
+                                        // TODO: Refactor backlinks to store full objects for better reliability
+                                        const obj = objects.find(o => o.title === source);
+                                        if (obj) {
+                                            await handleSave();
+                                            onSave(obj);
+                                        }
+                                    }}
+                                    className="text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left w-full"
+                                >
+                                    {source}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-sm text-slate-400 italic">{t.noBacklinks}</p>
+                )}
+
+                <div className="mt-8">
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">{t.context}</h3>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="mb-2">{t.created}: {new Date(currentObject.lastModified).toLocaleDateString()}</p>
+                        <p>{t.path}: {`/ My Drive / Nexus / ${currentObject.type} s / `}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default Editor;

@@ -1,0 +1,5 @@
+{
+  "name": "NexusDrive",
+  "description": "Object-Oriented Knowledge Management system built on Google Drive infrastructure with Local-First architecture.",
+  "requestFramePermissions": []
+}
