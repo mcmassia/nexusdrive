@@ -23,7 +23,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, links, o
     // Determine colors based on mode
     const strokeColor = isDarkMode ? '#1e293b' : '#fff'; // Node border (slate-800 vs white)
     const linkColor = isDarkMode ? '#475569' : '#999';   // Link color
-    const textColor = isDarkMode ? '#cbd5e1' : '#374151'; // Text color
+    const textColor = isDarkMode ? '#ffffff' : '#000000'; // Text color (white vs black)
 
     // Clear previous
     d3.select(svgRef.current).selectAll("*").remove();
