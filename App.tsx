@@ -406,7 +406,7 @@ const App: React.FC = () => {
 
             {
               currentView === 'tags' && (
-                <TagsManager lang={lang} />
+                <TagsManager lang={lang} onNavigate={setSelectedObject} />
               )
             }
 

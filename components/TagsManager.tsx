@@ -5,9 +5,10 @@ import { Tag, Edit2, Trash2, Search, Plus, Check, X, Merge, FileText } from 'luc
 
 interface TagsManagerProps {
     lang: 'en' | 'es';
+    onNavigate?: (doc: NexusObject) => void;
 }
 
-const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
+const TagsManager: React.FC<TagsManagerProps> = ({ lang, onNavigate }) => {
     const [allTags, setAllTags] = useState<string[]>([]);
     const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
     const [tagStats, setTagStats] = useState<Map<string, number>>(new Map());
@@ -350,6 +351,13 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
                                 {docsForTag.map(doc => (
                                     <div
                                         key={doc.id}
+                                        onClick={() => {
+                                            if (onNavigate) {
+                                                onNavigate(doc);
+                                                setViewingDocs(null);
+                                                setDocsForTag([]);
+                                            }
+                                        }}
                                         className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group"
                                     >
                                         <div className="flex items-start justify-between">
