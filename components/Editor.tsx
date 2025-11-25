@@ -161,6 +161,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                                 onSave(obj);
                             }
                         }}
+                        lang={lang}
                     />
 
                     {/* Rich Editor */}
@@ -171,21 +172,22 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             onChange={setContent}
                             allObjects={objects}
                             className="
-                                prose max-w-none
-                                !bg-white !text-slate-900
-                                p-8 rounded-lg shadow-sm
-                                [&_p]:!text-slate-900
-                                [&_h1]:!text-slate-900
-                                [&_h2]:!text-slate-900
-                                [&_h3]:!text-slate-900
-                                [&_li]:!text-slate-900
-                                [&_ul]:!text-slate-900
-                                [&_ol]:!text-slate-900
-                                [&_blockquote]:!text-slate-700 [&_blockquote]:!border-l-4 [&_blockquote]:!border-slate-300 [&_blockquote]:!pl-4 [&_blockquote]:!italic
-                                [&_code]:!bg-slate-100 [&_code]:!text-pink-600 [&_code]:!px-1 [&_code]:!rounded
-                                [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
-                                [&_a]:!text-blue-600 [&_a]:!underline
-                            "
+                                    prose max-w-none
+                                    !bg-white !text-slate-900
+                                    p-8 rounded-lg shadow-sm
+                                    [&_p]:!text-slate-900
+                                    [&_h1]:!text-slate-900
+                                    [&_h2]:!text-slate-900
+                                    [&_h3]:!text-slate-900
+                                    [&_li]:!text-slate-900
+                                    [&_ul]:!text-slate-900
+                                    [&_ol]:!text-slate-900
+                                    [&_blockquote]:!text-slate-700 [&_blockquote]:!border-l-4 [&_blockquote]:!border-slate-300 [&_blockquote]:!pl-4 [&_blockquote]:!italic
+                                    [&_code]:!bg-slate-100 [&_code]:!text-pink-600 [&_code]:!px-1 [&_code]:!rounded
+                                    [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
+                                    [&_a]:!text-blue-600 [&_a]:!underline
+                                "
+                            onTagClick={onTagClick}
                             onMentionClick={async (objectId) => {
                                 // Open the mentioned document
                                 const obj = await db.getObjectById(objectId);

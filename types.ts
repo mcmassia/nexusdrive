@@ -4,7 +4,8 @@ export enum NexusType {
   PAGE = 'Page',
   PERSON = 'Person',
   MEETING = 'Meeting',
-  PROJECT = 'Project'
+  PROJECT = 'Project',
+  NOTE = 'Note'
 }
 
 export interface NexusProperty {

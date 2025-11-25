@@ -1,5 +1,6 @@
+
 import React, { useRef, useEffect, useState } from 'react';
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table } from 'lucide-react';
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo } from 'lucide-react';
 import { db } from '../services/db';
 import { NexusObject, NexusType, TagConfig } from '../types';
 
@@ -7,12 +8,13 @@ interface RichEditorProps {
   initialContent: string;
   onChange: (html: string) => void;
   onMentionClick?: (objectId: string) => void;
+  onTagClick?: (tagName: string) => void;
   allObjects?: NexusObject[];
   className?: string;
   style?: React.CSSProperties;
 }
 
-const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMentionClick, allObjects, className = '', style = {} }) => {
+const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMentionClick, onTagClick, allObjects, className = '', style = {} }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
 
@@ -41,38 +43,38 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       case 'today':
       case 'hoy':
         targetDate = today;
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
         break;
       case 'yesterday':
       case 'ayer':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() - 1);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
         break;
       case 'tomorrow':
       case 'mañana':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + 1);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
         break;
       case 'anteayer':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() - 2);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
         break;
       case 'pasado mañana':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + 2);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
         break;
     }
 
     if (targetDate) {
       return {
-        id: `daily-${targetDate.toISOString().split('T')[0]}`,
+        id: `daily - ${targetDate.toISOString().split('T')[0]} `,
         title,
         type: NexusType.PAGE,
-        content: `<h1>Daily Log: ${targetDate.toISOString().split('T')[0]}</h1><p>What's on your mind today?</p>`,
+        content: `< h1 > Daily Log: ${targetDate.toISOString().split('T')[0]}</h1 > <p>What's on your mind today?</p>`,
         lastModified: targetDate,
         tags: ['daily-journal'],
         metadata: [{ key: 'date', label: 'Date', value: targetDate.toISOString().split('T')[0], type: 'date' }]
@@ -479,14 +481,26 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   const handleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+
+    // Handle Mentions
     if (target.classList.contains('nexus-mention') || target.closest('.nexus-mention')) {
       const mention = target.classList.contains('nexus-mention') ? target : target.closest('.nexus-mention') as HTMLElement;
       const objectId = mention.dataset.objectId;
       if (objectId && onMentionClick) {
-        // Prevent editor from focusing/placing cursor if we're just navigating
         e.preventDefault();
         e.stopPropagation();
         onMentionClick(objectId);
+      }
+    }
+
+    // Handle Tags
+    if (target.classList.contains('nexus-tag') || target.closest('.nexus-tag')) {
+      const tagEl = target.classList.contains('nexus-tag') ? target : target.closest('.nexus-tag') as HTMLElement;
+      const tagText = tagEl.textContent?.replace('#', '').trim();
+      if (tagText && onTagClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        onTagClick(tagText);
       }
     }
   };

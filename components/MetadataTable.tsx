@@ -8,11 +8,15 @@ interface MetadataTableProps {
   onTagRemove?: (tag: string) => void;
   onTagClick?: (tag: string) => void;
   allObjects?: NexusObject[];
-  typeSchema?: TypeSchema; // Added typeSchema prop
-  onDocumentClick?: (documentId: string) => void; // New prop for document navigation
+  typeSchema?: TypeSchema;
+  onDocumentClick?: (documentId: string) => void;
+  lang: 'en' | 'es';
 }
 
-const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, onDocumentClick }) => { // Destructured onDocumentClick
+const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, onDocumentClick, lang }) => {
+  // ... (existing state and handlers)
+
+  // ... (inside return)
   const [suggestionBox, setSuggestionBox] = React.useState<{
     visible: boolean;
     top: number;
@@ -283,6 +287,17 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           <tr className="border-b border-slate-200/50 dark:border-slate-700/50">
             <td className="px-4 py-2 w-32 font-medium text-slate-500 dark:text-slate-400">Type</td>
             <td className="px-4 py-2 text-slate-700 dark:text-slate-200 font-semibold bg-white dark:bg-slate-900">{object.type}</td>
+          </tr>
+          <tr className="border-b border-slate-200/50 dark:border-slate-700/50">
+            <td className="px-4 py-2 font-medium text-slate-500 dark:text-slate-400">
+              {lang === 'es' ? 'Última Modificación' : 'Last Modified'}
+            </td>
+            <td className="px-4 py-2 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 text-xs">
+              {new Date(object.lastModified).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+              })}
+            </td>
           </tr>
           {object.metadata.map((prop, idx) => (
             <tr key={prop.key} className="border-b border-slate-200/50 dark:border-slate-700/50 last:border-0">

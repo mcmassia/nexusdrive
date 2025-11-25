@@ -7,6 +7,7 @@ import DocumentsView from './components/DocumentsView';
 import TypeManager from './components/TypeManager';
 import TagsManager from './components/TagsManager';
 import AISearchModal from './components/AISearchModal';
+import CalendarView from './components/CalendarView';
 import LoginScreen from './components/LoginScreen';
 import RightPanel from './components/RightPanel';
 import { NexusObject, NexusType, GraphNode, GraphLink, UserProfile, TypeSchema, NexusProperty } from './types';
@@ -30,14 +31,27 @@ const App: React.FC = () => {
 
 
   // Language State
-  const [lang, setLang] = useState<'en' | 'es'>('en');
+  const [lang, setLang] = useState<'en' | 'es'>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nexus_lang');
+      if (stored === 'en' || stored === 'es') return stored;
+    }
+    return 'es'; // Default to Spanish
+  });
+
+  // Persist Language
+  useEffect(() => {
+    localStorage.setItem('nexus_lang', lang);
+  }, [lang]);
 
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nexus_theme') === 'dark';
+      const stored = localStorage.getItem('nexus_theme');
+      if (stored) return stored === 'dark';
+      return true; // Default to dark
     }
-    return false;
+    return true;
   });
 
   // Data State
@@ -107,6 +121,9 @@ const App: React.FC = () => {
       // Pull changes from Drive - call the internal sync
       // We need to expose this as a public method in db.ts
       await db.syncFromDrive();
+
+      // Sync Calendar Events
+      await db.syncCalendarEvents();
 
       // Reload local data
       await loadData();
@@ -239,12 +256,14 @@ const App: React.FC = () => {
           </h2>
           <div className="flex gap-3 items-center">
             <button
-              onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-4 py-2 rounded-full text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 w-64"
+              onClick={() => {
+                setIsSearchOpen(true);
+                setSelectedObject(null);
+              }}
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+              title={t.searchPlaceholder}
             >
-              <Search size={16} />
-              <span>{t.searchPlaceholder}</span>
-              <span className="ml-auto text-xs bg-white dark:bg-slate-700 px-1.5 rounded border border-slate-300 dark:border-slate-600">⌘K</span>
+              <Search size={20} />
             </button>
 
             {/* NEW BUTTON & MENU */}
@@ -425,6 +444,17 @@ const App: React.FC = () => {
                     setTagsSearchQuery(''); // Clear filter after navigation
                   }}
                   initialSearchQuery={tagsSearchQuery}
+                />
+              )
+            }
+
+            {
+              currentView === 'calendar' && (
+                <CalendarView
+                  lang={lang}
+                  onNavigate={(obj) => {
+                    setSelectedObject(obj);
+                  }}
                 />
               )
             }

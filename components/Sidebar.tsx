@@ -46,17 +46,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
 
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         {/* 1. HOME */}
-        <button onClick={() => { onViewChange('dashboard'); onTypeFilter(null); }} className={navItemClass('dashboard')} title={t.home}>
+        <button onClick={() => { onViewChange('dashboard'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('dashboard')} title={t.home}>
           <Home size={18} className="shrink-0" /> {!isCollapsed && <span>{t.home}</span>}
         </button>
 
         {/* 2. GRAPH */}
-        <button onClick={() => { onViewChange('graph'); onTypeFilter(null); }} className={navItemClass('graph')} title={t.graph}>
+        <button onClick={() => { onViewChange('graph'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('graph')} title={t.graph}>
           <LayoutGrid size={18} className="shrink-0" /> {!isCollapsed && <span>{t.graph}</span>}
         </button>
 
         {/* 3. DOCUMENTS View Link */}
-        <button onClick={() => { onViewChange('documents'); onTypeFilter(null); }} className={navItemClass('documents')} title={lang === 'es' ? 'Documentos' : 'Documents'}>
+        <button onClick={() => { onViewChange('documents'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('documents')} title={lang === 'es' ? 'Documentos' : 'Documents'}>
           <FileText size={18} className="shrink-0" />
           {!isCollapsed && (
             <div className="flex items-center justify-between w-full">
@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
         </button>
 
         {/* 4. CALENDAR View Link */}
-        <button onClick={() => { onViewChange('calendar'); onTypeFilter(null); }} className={navItemClass('calendar')} title={t.calendar}>
+        <button onClick={() => { onViewChange('calendar'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('calendar')} title={t.calendar}>
           <Calendar size={18} className="shrink-0" /> {!isCollapsed && <span>{t.calendar}</span>}
         </button>
 
@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           {isCollapsed ? '---' : t.types}
         </div>
 
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PAGE); }} className={navItemClass('pages')} title={t.pages}>
+        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PAGE); onObjectSelect(null); }} className={navItemClass('pages')} title={t.pages}>
           <FileText size={18} className="shrink-0" />
           {!isCollapsed && (
             <div className="flex items-center justify-between w-full">
@@ -84,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
             </div>
           )}
         </button>
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PERSON); }} className={navItemClass('people')} title={t.people}>
+        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PERSON); onObjectSelect(null); }} className={navItemClass('people')} title={t.people}>
           <Users size={18} className="shrink-0" />
           {!isCollapsed && (
             <div className="flex items-center justify-between w-full">
@@ -93,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
             </div>
           )}
         </button>
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.MEETING); }} className={navItemClass('meetings')} title={t.meetings}>
+        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.MEETING); onObjectSelect(null); }} className={navItemClass('meetings')} title={t.meetings}>
           <Briefcase size={18} className="shrink-0" />
           {!isCollapsed && (
             <div className="flex items-center justify-between w-full">
@@ -103,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           )}
         </button>
         {/* 4. GRAPH */}
-        <button onClick={() => onViewChange('graph')} className={navItemClass('graph')} title={t.graph}>
+        <button onClick={() => { onViewChange('graph'); onObjectSelect(null); }} className={navItemClass('graph')} title={t.graph}>
           <Network size={20} />
           {!isCollapsed && <span>{t.graph}</span>}
         </button>
@@ -112,11 +112,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
         <div className="my-2 border-t border-slate-200 dark:border-slate-700" />
 
         {/* 5. TAGS */}
-        <button onClick={() => onViewChange('tags')} className={navItemClass('tags')} title={lang === 'es' ? 'Etiquetas' : 'Tags'}>
+        <button onClick={() => { onViewChange('tags'); onObjectSelect(null); }} className={navItemClass('tags')} title={lang === 'es' ? 'Etiquetas' : 'Tags'}>
           <Tag size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Etiquetas' : 'Tags'}</span>}
         </button>
         {/* 6. SETTINGS */}
-        <button onClick={() => onViewChange('settings')} className={navItemClass('settings')} title={lang === 'es' ? 'Configuración' : 'Settings'}>
+        <button onClick={() => { onViewChange('settings'); onObjectSelect(null); }} className={navItemClass('settings')} title={lang === 'es' ? 'Configuración' : 'Settings'}>
           <Settings size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Configuración' : 'Settings'}</span>}
         </button>
       </nav>

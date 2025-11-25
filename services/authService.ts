@@ -8,7 +8,7 @@ declare global {
 
 // CLIENT_ID from environment variables (Vite uses import.meta.env)
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const SCOPES = 'openid profile email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.metadata.readonly';
+const SCOPES = 'openid profile email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar';
 const FORCE_DEMO = import.meta.env.VITE_DEMO_MODE === 'true';
 
 class AuthService {
@@ -105,7 +105,7 @@ class AuthService {
     if (this.tokenClient) {
       // Trigger the real Google Login Popup
       try {
-        this.tokenClient.requestAccessToken();
+        this.tokenClient.requestAccessToken({ prompt: 'consent' });
       } catch (error) {
         console.error("Auth request failed", error);
         this.mockLogin();

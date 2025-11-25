@@ -3,6 +3,7 @@ import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefin
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
+import { calendarService } from './calendarService';
 
 // IndexedDB Schema
 interface NexusDB extends DBSchema {
@@ -26,6 +27,14 @@ interface NexusDB extends DBSchema {
   tagConfigs: {
     key: string;
     value: TagConfig;
+  };
+  calendar_events: {
+    key: string;
+    value: any; // Storing raw event data
+  };
+  calendar_preferences: {
+    key: string;
+    value: { id: string; selectedCalendars: string[] };
   };
 }
 
@@ -55,7 +64,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 5, {
+      this.db = await openDB<NexusDB>('nexus-db', 6, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -94,6 +103,14 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('tagConfigs')) {
             db.createObjectStore('tagConfigs', { keyPath: 'name' });
             console.log('[LocalDB] Created tagConfigs store');
+          }
+
+          // NEW in v2.2: Calendar stores
+          if (!db.objectStoreNames.contains('calendar_events')) {
+            db.createObjectStore('calendar_events', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('calendar_preferences')) {
+            db.createObjectStore('calendar_preferences', { keyPath: 'id' });
           }
         },
       });
@@ -223,6 +240,82 @@ class LocalDatabase {
     } catch (error) {
       console.error('[LocalDB] Sync from Drive failed:', error);
     }
+  }
+
+  /**
+   * Sync Calendar Events
+   * Fetches events from Google Calendar and stores them in calendar_events store
+   */
+  async syncCalendarEvents() {
+    if (!this.db || authService.isInDemoMode()) return;
+
+    try {
+      console.log('📅 [LocalDB] Syncing Calendar events...');
+
+      // Get selected calendars with colors
+      const prefs = await this.getCalendarPreferences();
+      const selectedCalendars = prefs.calendars.length > 0 ? prefs.calendars : [{ id: 'primary' }];
+
+      const now = new Date();
+      const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(); // Previous month
+      const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString(); // Next 3 months
+
+      const events = await calendarService.listEvents(timeMin, timeMax, selectedCalendars);
+
+      const tx = this.db.transaction('calendar_events', 'readwrite');
+      const store = tx.objectStore('calendar_events');
+
+      // Optional: Clear existing events to remove deleted ones? 
+      // Ideally we should match IDs, but for now let's just clear all and re-add to ensure deleted events are gone.
+      await store.clear();
+
+      for (const event of events) {
+        if (event.id) {
+          await store.put(event);
+        }
+      }
+
+      await tx.done;
+      console.log(`📅 [LocalDB] Synced ${events.length} calendar events`);
+
+    } catch (error) {
+      console.error('[LocalDB] Calendar sync failed:', error);
+    }
+  }
+
+  async getCalendarPreferences(): Promise<{ id: string; calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] }> {
+    if (!this.db) return { id: 'default', calendars: [{ id: 'primary' }] };
+    const prefs = await this.db.get('calendar_preferences', 'default') as any;
+
+    // Migration: handle old format if necessary
+    if (prefs && prefs.selectedCalendars) {
+      // Convert old format to new
+      return {
+        id: 'default',
+        calendars: (prefs.selectedCalendars as string[]).map(id => ({ id }))
+      };
+    }
+
+    return prefs || { id: 'default', calendars: [{ id: 'primary' }] };
+  }
+
+  async saveCalendarPreferences(calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[]): Promise<void> {
+    if (!this.db) return;
+    // Ensure we are saving in the new format
+    await this.db.put('calendar_preferences', { id: 'default', calendars });
+  }
+
+  async getCalendarEvents(start?: Date, end?: Date): Promise<any[]> {
+    if (!this.db) return [];
+    const events = await this.db.getAll('calendar_events');
+    // Filter in memory for now
+    if (start && end) {
+      return events.filter(e => {
+        const eventStart = new Date(e.start.dateTime || e.start.date);
+        return eventStart >= start && eventStart <= end;
+      });
+    }
+    return events;
   }
 
   /**
@@ -440,6 +533,48 @@ class LocalDatabase {
       // Sync to Drive if not in demo mode
       if (!authService.isInDemoMode()) {
         console.log(`🔄[LocalDB] Syncing "${updatedObject.title}" to Drive...`);
+
+        // Google Calendar Sync (Export)
+        if (updatedObject.type === NexusType.MEETING) {
+          const dateProp = updatedObject.metadata.find(m => m.key === 'date');
+          const eventIdProp = updatedObject.metadata.find(m => m.key === 'googleEventId');
+
+          if (dateProp && dateProp.value) {
+            const startTime = new Date(dateProp.value as string);
+            const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+
+            const eventData = {
+              summary: updatedObject.title,
+              description: updatedObject.content.replace(/<[^>]*>/g, ''), // Strip HTML for description
+              start: { dateTime: startTime.toISOString() },
+              end: { dateTime: endTime.toISOString() }
+            };
+
+            if (eventIdProp && eventIdProp.value) {
+              // Update existing event
+              console.log(`📅 [LocalDB] Updating Calendar event ${eventIdProp.value}...`);
+              await calendarService.updateEvent(eventIdProp.value as string, eventData);
+            } else {
+              // Create new event
+              console.log(`📅 [LocalDB] Creating new Calendar event...`);
+              const newEvent = await calendarService.createEvent(eventData);
+              if (newEvent && newEvent.id) {
+                // Update local object with new Event ID (without triggering another save loop if possible)
+                // We have to save again to persist the ID
+                updatedObject.metadata.push({
+                  key: 'googleEventId',
+                  label: 'Google Event ID',
+                  value: newEvent.id,
+                  type: 'text'
+                });
+                // Update the object in DB directly to avoid infinite recursion of saveObject
+                await this.db.put('objects', { ...updatedObject, driveFileId });
+                console.log(`✅ [LocalDB] Linked to new Calendar Event ID: ${newEvent.id}`);
+              }
+            }
+          }
+        }
+
         try {
           if (driveFileId) {
             // Update existing file in Drive
@@ -569,18 +704,43 @@ class LocalDatabase {
     return note;
   }
 
+  // Helper to normalize date strings to YYYY-MM-DD
+  private normalizeDate(dateStr: string): string | null {
+    if (!dateStr) return null;
+    try {
+      // Check for DD/MM/YYYY format (common in Spanish locale)
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          const year = parts[2];
+          return `${year}-${month}-${day}`;
+        }
+      }
+      // Try standard Date parsing (handles ISO strings, etc.)
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
+
   // Sidebar calendar methods
   async getActiveDates(): Promise<string[]> {
     const objects = await this.getObjects();
     const dates = new Set<string>();
 
     objects.forEach(obj => {
-      if (obj.lastModified) {
-        dates.add(new Date(obj.lastModified).toISOString().split('T')[0]);
-      }
       obj.metadata.forEach(meta => {
         if (meta.type === 'date' && meta.value) {
-          dates.add(meta.value as string);
+          const normalized = this.normalizeDate(meta.value as string);
+          if (normalized) {
+            dates.add(normalized);
+          }
         }
       });
     });
@@ -590,9 +750,13 @@ class LocalDatabase {
   async getObjectsByDate(dateStr: string): Promise<NexusObject[]> {
     const objects = await this.getObjects();
     return objects.filter(obj => {
-      const modDate = new Date(obj.lastModified).toISOString().split('T')[0];
-      if (modDate === dateStr) return true;
-      return obj.metadata.some(m => m.type === 'date' && m.value === dateStr);
+      return obj.metadata.some(m => {
+        if (m.type === 'date' && m.value) {
+          const normalized = this.normalizeDate(m.value as string);
+          return normalized === dateStr;
+        }
+        return false;
+      });
     });
   }
 

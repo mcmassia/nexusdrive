@@ -21,7 +21,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects }) => {
 
   useEffect(() => {
     // Update recent docs and load type schemas
-    setRecentDocs(objects.slice(0, 5));
+    const sorted = [...objects].sort((a, b) =>
+      new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+    );
+    setRecentDocs(sorted.slice(0, 5));
     db.getAllTypeSchemas().then(schemas => setTypeSchemas(schemas));
   }, [objects]);
 
@@ -91,7 +94,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects }) => {
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 line-clamp-2 text-left">{doc.title}</h3>
                 <div className="flex items-center gap-2 mt-auto">
                   <Clock size={12} className="text-slate-400" />
-                  <span className="text-xs text-slate-400">{new Date(doc.lastModified).toLocaleDateString()}</span>
+                  <span className="text-xs text-slate-400">
+                    {new Date(doc.lastModified).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
+                      dateStyle: 'short',
+                      timeStyle: 'short'
+                    })}
+                  </span>
                 </div>
               </div>
             ))}

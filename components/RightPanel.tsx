@@ -38,14 +38,26 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
         // Update daily objects when selected date changes or objects change
         const dateStr = selectedDate;
         const matches = objects.filter(obj => {
-            // Check lastModified (use local date string for comparison)
-            const objDate = new Date(obj.lastModified);
-            // Format as YYYY-MM-DD in local timezone
-            const localDate = `${objDate.getFullYear()}-${String(objDate.getMonth() + 1).padStart(2, '0')}-${String(objDate.getDate()).padStart(2, '0')}`;
-            if (localDate === dateStr) return true;
-
-            // Check metadata dates
-            return obj.metadata.some(m => m.type === 'date' && m.value === dateStr);
+            // Check metadata dates ONLY
+            return obj.metadata.some(m => {
+                if (m.type === 'date' && m.value) {
+                    // Normalize date
+                    let normalized = m.value as string;
+                    if (normalized.includes('/')) {
+                        const parts = normalized.split('/');
+                        if (parts.length === 3) {
+                            normalized = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                        }
+                    } else {
+                        const d = new Date(normalized);
+                        if (!isNaN(d.getTime())) {
+                            normalized = d.toISOString().split('T')[0];
+                        }
+                    }
+                    return normalized === dateStr;
+                }
+                return false;
+            });
         });
         setDailyObjects(matches);
     }, [selectedDate, objects]);
