@@ -146,7 +146,16 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         const filtered = Array.from(allTags).filter(tag =>
           tag.toLowerCase().includes(query.toLowerCase())
         ).slice(0, 5);
-        setTagResults(filtered);
+
+        // If no matches and user has typed something, add option to create new tag
+        if (filtered.length === 0 && query.trim()) {
+          setTagResults([query.trim()]);
+        } else if (query.trim() && !filtered.includes(query.trim())) {
+          // If exact match doesn't exist, add it as first option
+          setTagResults([query.trim(), ...filtered]);
+        } else {
+          setTagResults(filtered);
+        }
       };
       fetchTags();
     }
