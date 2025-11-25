@@ -73,7 +73,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, links, o
       .attr("x", 18)
       .attr("y", 5)
       .attr("font-size", "10px")
-      .attr("fill", textColor)
+      .style("fill", textColor) // Use style instead of attr to override CSS
+      .style("stroke", "none") // Prevent inheriting stroke from parent group
       .style("pointer-events", "none");
 
     simulation.on("tick", () => {
