@@ -55,7 +55,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 4, {
+      this.db = await openDB<NexusDB>('nexus-db', 3, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
