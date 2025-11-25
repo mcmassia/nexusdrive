@@ -192,22 +192,25 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   const insertMention = async (obj: NexusObject) => {
     const selection = window.getSelection();
-    if (!selection) return;
+    if (!selection || !selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
     const textNode = range.startContainer;
+
+    // Save the position before modification
+    let insertPosition = range.startOffset;
+    let parentNode = textNode.parentNode;
 
     // Remove the @ and query text
     if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
       const text = textNode.textContent;
       const lastAt = text.lastIndexOf('@');
       if (lastAt !== -1) {
-        textNode.textContent = text.substring(0, lastAt);
-        const newRange = document.createRange();
-        newRange.setStart(textNode, textNode.textContent.length);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
+        // Remove from @ to cursor
+        const beforeAt = text.substring(0, lastAt);
+        const afterCursor = text.substring(range.startOffset);
+        textNode.textContent = beforeAt + afterCursor;
+        insertPosition = lastAt;
       }
     }
 
@@ -291,19 +294,31 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       }
     });
 
-    range.insertNode(mention);
-    range.setStartAfter(mention);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // Create a new range at the correct insertion point
+    const newRange = document.createRange();
+    if (textNode.nodeType === Node.TEXT_NODE) {
+      newRange.setStart(textNode, insertPosition);
+      newRange.setEnd(textNode, insertPosition);
+    } else {
+      // Fallback if not a text node
+      newRange.selectNodeContents(textNode);
+      newRange.collapse(false);
+    }
 
-    // Add a space after
+    // Insert mention at the correct position
+    newRange.insertNode(mention);
+
+    // Add a space after the mention
     const space = document.createTextNode('\u00A0');
-    range.insertNode(space);
-    range.setStartAfter(space);
-    range.collapse(true);
+    newRange.setStartAfter(mention);
+    newRange.insertNode(space);
+
+    // Place cursor after the space
+    newRange.setStartAfter(space);
+    newRange.collapse(true);
+
     selection.removeAllRanges();
-    selection.addRange(range);
+    selection.addRange(newRange);
 
     setMenuOpen(false);
 
@@ -315,22 +330,24 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   const insertTag = (tag: string) => {
     const selection = window.getSelection();
-    if (!selection) return;
+    if (!selection || !selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
     const textNode = range.startContainer;
+
+    // Save the position before modification
+    let insertPosition = range.startOffset;
 
     // Remove the # and query text
     if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
       const text = textNode.textContent;
       const lastHash = text.lastIndexOf('#');
       if (lastHash !== -1) {
-        textNode.textContent = text.substring(0, lastHash);
-        const newRange = document.createRange();
-        newRange.setStart(textNode, textNode.textContent.length);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
+        // Remove from # to cursor
+        const beforeHash = text.substring(0, lastHash);
+        const afterCursor = text.substring(range.startOffset);
+        textNode.textContent = beforeHash + afterCursor;
+        insertPosition = lastHash;
       }
     }
 
@@ -341,19 +358,31 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     tagElement.textContent = `#${tag}`;
     tagElement.style.cssText = 'background: rgb(16, 185, 129); color: white; padding: 2px 6px; border-radius: 4px; cursor: pointer; margin: 0 2px;';
 
-    range.insertNode(tagElement);
-    range.setStartAfter(tagElement);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // Create a new range at the correct insertion point
+    const newRange = document.createRange();
+    if (textNode.nodeType === Node.TEXT_NODE) {
+      newRange.setStart(textNode, insertPosition);
+      newRange.setEnd(textNode, insertPosition);
+    } else {
+      // Fallback if not a text node
+      newRange.selectNodeContents(textNode);
+      newRange.collapse(false);
+    }
 
-    // Add a space after
+    // Insert tag at the correct position
+    newRange.insertNode(tagElement);
+
+    // Add a space after the tag
     const space = document.createTextNode('\u00A0');
-    range.insertNode(space);
-    range.setStartAfter(space);
-    range.collapse(true);
+    newRange.setStartAfter(tagElement);
+    newRange.insertNode(space);
+
+    // Place cursor after the space
+    newRange.setStartAfter(space);
+    newRange.collapse(true);
+
     selection.removeAllRanges();
-    selection.addRange(range);
+    selection.addRange(newRange);
 
     setMenuOpen(false);
 
