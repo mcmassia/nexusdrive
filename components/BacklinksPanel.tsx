@@ -6,7 +6,7 @@ import { TRANSLATIONS } from '../constants';
 
 interface BacklinksPanelProps {
     targetDocId: string;
-    onNavigate: (docId: string) => void;
+    onNavigate: (docId: string, blockId?: string) => void;
     lang: 'en' | 'es';
 }
 
@@ -80,7 +80,7 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
 
     if (isLoading) {
         return (
-            <div className="w-96 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
+            <div className="w-full border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">
                     {t.linkedRefs}
                 </h3>
@@ -90,7 +90,7 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
     }
 
     return (
-        <div className="w-96 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
+        <div className="w-full border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6">
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     {t.linkedRefs}
@@ -101,30 +101,30 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
             </div>
 
             {backlinks.length > 0 ? (
-                <div className="space-y-5">
+                <div className="space-y-6">
                     {backlinks.map((backlink) => {
                         const isCollapsed = collapsedGroups.has(backlink.sourceDocId);
                         return (
-                            <div key={backlink.sourceDocId} className="space-y-2.5">
+                            <div key={backlink.sourceDocId} className="space-y-3">
                                 {/* Date header with type badge - Clickable to collapse */}
                                 <button
                                     onClick={() => toggleGroup(backlink.sourceDocId)}
-                                    className="w-full flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-colors group"
+                                    className="w-full flex items-center justify-between pb-2 border-b-2 border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 transition-colors group"
                                 >
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3">
                                         <ChevronDown
-                                            size={14}
+                                            size={16}
                                             className={`text-slate-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
                                         />
-                                        <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold group-hover:text-slate-800 dark:group-hover:text-slate-300">
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-bold group-hover:text-slate-900 dark:group-hover:text-slate-200">
                                             {formatDate(backlink.sourceDocDate)}
                                         </span>
                                         <span className="text-xs text-slate-500 dark:text-slate-400">
-                                            ({backlink.mentionContexts.length})
+                                            ({backlink.mentionContexts.length} {backlink.mentionContexts.length === 1 ? 'mention' : 'mentions'})
                                         </span>
                                     </div>
                                     <span
-                                        className="text-xs font-bold uppercase px-2.5 py-1 rounded-md shadow-sm"
+                                        className="text-xs font-bold uppercase px-3 py-1.5 rounded-lg shadow-sm"
                                         style={{
                                             backgroundColor: getTypeColor(backlink.sourceDocType),
                                             color: 'white'
@@ -134,27 +134,31 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
                                     </span>
                                 </button>
 
-                                {/* Mention contexts - Collapsible */}
-                                {!isCollapsed && backlink.mentionContexts.map((context, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => onNavigate(backlink.sourceDocId)}
-                                        className="w-full text-left p-3.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group"
-                                    >
-                                        {/* Source title */}
-                                        <div className="flex items-start gap-2 mb-2">
-                                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: getTypeColor(backlink.sourceDocType) }}></div>
-                                            <div className="text-sm font-semibold text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 group-hover:underline leading-snug">
-                                                {backlink.sourceDocTitle}
-                                            </div>
-                                        </div>
+                                {/* Mention contexts - Grid layout for full width */}
+                                {!isCollapsed && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {backlink.mentionContexts.map((context, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => onNavigate(backlink.sourceDocId, context.blockId)}
+                                                className="text-left p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all group"
+                                            >
+                                                {/* Source title with indicator */}
+                                                <div className="flex items-start gap-2 mb-3">
+                                                    <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: getTypeColor(backlink.sourceDocType) }}></div>
+                                                    <div className="text-sm font-semibold text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 group-hover:underline leading-tight">
+                                                        {backlink.sourceDocTitle}
+                                                    </div>
+                                                </div>
 
-                                        {/* Context text with mention highlighting */}
-                                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pl-3.5">
-                                            "{highlightMention(context.contextText)}"
-                                        </p>
-                                    </button>
-                                ))}
+                                                {/* Context text with mention highlighting */}
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pl-4 line-clamp-4">
+                                                    "{highlightMention(context.contextText)}"
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -169,4 +173,3 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
 };
 
 export default BacklinksPanel;
-

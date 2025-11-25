@@ -199,14 +199,21 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                 </div>
             </div>
 
-            {/* RIGHT SIDEBAR: Backlinks with Context */}
+            {/* BACKLINKS PANEL: Full width below editor */}
             <BacklinksPanel
                 targetDocId={currentObject.id}
-                onNavigate={(docId) => {
+                onNavigate={(docId, blockId) => {
                     const obj = objects.find(o => o.id === docId);
                     if (obj) {
                         handleSave();
                         onSave(obj);
+                        // TODO: Scroll to blockId after document loads
+                        if (blockId) {
+                            setTimeout(() => {
+                                const element = document.getElementById(blockId);
+                                element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                        }
                     }
                 }}
                 lang={lang}
