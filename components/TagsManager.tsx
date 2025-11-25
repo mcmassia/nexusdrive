@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TagConfig } from '../types';
+import { TagConfig, NexusObject } from '../types';
 import { db } from '../services/db';
 import { Tag, Edit2, Trash2, Search, Plus, Check, X, Merge, FileText } from 'lucide-react';
 
@@ -17,6 +17,7 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
     const [newColor, setNewColor] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [viewingDocs, setViewingDocs] = useState<string | null>(null);
+    const [docsForTag, setDocsForTag] = useState<NexusObject[]>([]);
     const [sortBy, setSortBy] = useState<'name' | 'usage'>('usage');
 
     const t = lang === 'es' ? {
@@ -105,12 +106,18 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
 
     const handleDeleteTag = async (tagName: string) => {
         const count = tagStats.get(tagName) || 0;
-        const confirmed = window.confirm(`${t.confirmDelete}\n${t.willAffect} ${count} ${t.documents}`);
+        const confirmed = window.confirm(`${t.confirmDelete} \n${t.willAffect} ${count} ${t.documents} `);
 
         if (confirmed) {
             await db.deleteTagFromAllDocs(tagName);
             await loadTags();
         }
+    };
+
+    const handleViewDocs = async (tagName: string) => {
+        const docs = await db.getDocumentsByTag(tagName);
+        setDocsForTag(docs);
+        setViewingDocs(tagName);
     };
 
     const startEdit = (tagName: string) => {
@@ -207,7 +214,7 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
                                                     <button
                                                         key={preColor}
                                                         onClick={() => setNewColor(preColor)}
-                                                        className={`w-8 h-8 rounded border-2 ${newColor === preColor ? 'border-slate-800 dark:border-slate-200' : 'border-transparent'}`}
+                                                        className={`w - 8 h - 8 rounded border - 2 ${newColor === preColor ? 'border-slate-800 dark:border-slate-200' : 'border-transparent'} `}
                                                         style={{ backgroundColor: preColor }}
                                                     />
                                                 ))}
@@ -288,6 +295,14 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
                                             </p>
                                         )}
 
+                                        <button
+                                            onClick={() => handleViewDocs(tag)}
+                                            className="w-full mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <FileText size={14} />
+                                            {t.viewDocs}
+                                        </button>
+
                                         {config?.created && (
                                             <div className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                                                 {t.created}: {new Date(config.created).toLocaleDateString()}
@@ -298,6 +313,65 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang }) => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Documents Modal */}
+            {viewingDocs && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-3">
+                                <span
+                                    className="px-3 py-1 rounded-full text-white font-semibold text-sm"
+                                    style={{ backgroundColor: tagConfigs.get(viewingDocs)?.color || '#10b981' }}
+                                >
+                                    #{viewingDocs}
+                                </span>
+                                <span className="text-slate-600 dark:text-slate-400 text-sm">
+                                    {docsForTag.length} {t.documents}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setViewingDocs(null);
+                                    setDocsForTag([]);
+                                }}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Documents List */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="space-y-3">
+                                {docsForTag.map(doc => (
+                                    <div
+                                        key={doc.id}
+                                        className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group"
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-1">
+                                                    {doc.title}
+                                                </h4>
+                                                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                                    <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
+                                                        {doc.type}
+                                                    </span>
+                                                    <span>
+                                                        {new Date(doc.lastModified).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
