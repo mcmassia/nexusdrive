@@ -31,6 +31,14 @@ export interface MentionContext {
   timestamp: Date;
 }
 
+export interface TagConfig {
+  name: string;           // Tag name (without #)
+  color: string;          // Hex color
+  description?: string;   // Optional description
+  created: Date;          // When first used
+  lastModified: Date;     // Last update
+}
+
 // Configuration for object types
 
 export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select';

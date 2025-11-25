@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
-import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext } from '../types';
+import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig } from '../types';
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
@@ -22,6 +22,10 @@ interface NexusDB extends DBSchema {
   typeSchemas: {
     key: string;
     value: TypeSchema;
+  };
+  tagConfigs: {
+    key: string;
+    value: TagConfig;
   };
 }
 
@@ -84,6 +88,12 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('typeSchemas')) {
             db.createObjectStore('typeSchemas', { keyPath: 'type' });
             console.log('[LocalDB] Created typeSchemas store');
+          }
+
+          // NEW in v2.1: Tag configs store
+          if (!db.objectStoreNames.contains('tagConfigs')) {
+            db.createObjectStore('tagConfigs', { keyPath: 'name' });
+            console.log('[LocalDB] Created tagConfigs store');
           }
         },
       });
@@ -681,6 +691,107 @@ class LocalDatabase {
       console.error('[LocalDB] Failed to delete type schema:', error);
       throw error;
     }
+  }
+
+  // ==================== TAG CONFIGURATION METHODS ====================
+
+  async getTagConfig(name: string): Promise<TagConfig | undefined> {
+    if (!this.db) throw new Error('Database not initialized');
+    return await this.db.get('tagConfigs', name);
+  }
+
+  async getAllTagConfigs(): Promise<TagConfig[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    return await this.db.getAll('tagConfigs');
+  }
+
+  async saveTagConfig(config: TagConfig): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.put('tagConfigs', config);
+  }
+
+  async deleteTagConfig(name: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.delete('tagConfigs', name);
+  }
+
+  // Get statistics for all tags
+  async getTagStats(): Promise<Map<string, number>> {
+    const objects = await this.getObjects();
+    const stats = new Map<string, number>();
+
+    objects.forEach(obj => {
+      obj.tags.forEach(tag => {
+        stats.set(tag, (stats.get(tag) || 0) + 1);
+      });
+    });
+
+    return stats;
+  }
+
+  // Get all documents that use a specific tag
+  async getDocumentsByTag(tagName: string): Promise<NexusObject[]> {
+    const objects = await this.getObjects();
+    return objects.filter(obj => obj.tags.includes(tagName));
+  }
+
+  // Rename a tag across all documents
+  async renameTag(oldName: string, newName: string): Promise<void> {
+    const objects = await this.getObjects();
+    const affectedObjects = objects.filter(obj => obj.tags.includes(oldName));
+
+    for (const obj of affectedObjects) {
+      obj.tags = obj.tags.map(tag => tag === oldName ? newName : tag);
+      await this.saveObject(obj);
+    }
+
+    // Update tag config if exists
+    const oldConfig = await this.getTagConfig(oldName);
+    if (oldConfig) {
+      const newConfig: TagConfig = {
+        ...oldConfig,
+        name: newName,
+        lastModified: new Date()
+      };
+      await this.saveTagConfig(newConfig);
+      await this.deleteTagConfig(oldName);
+    }
+  }
+
+  // Merge multiple tags into one
+  async mergeTags(sourceTags: string[], targetTag: string): Promise<void> {
+    const objects = await this.getObjects();
+
+    for (const obj of objects) {
+      const hasAnySource = sourceTags.some(tag => obj.tags.includes(tag));
+      if (hasAnySource) {
+        // Remove all source tags and add target tag
+        obj.tags = obj.tags.filter(tag => !sourceTags.includes(tag));
+        if (!obj.tags.includes(targetTag)) {
+          obj.tags.push(targetTag);
+        }
+        await this.saveObject(obj);
+      }
+    }
+
+    // Delete source tag configs
+    for (const sourceTag of sourceTags) {
+      await this.deleteTagConfig(sourceTag);
+    }
+  }
+
+  // Delete a tag from all documents
+  async deleteTagFromAllDocs(tagName: string): Promise<void> {
+    const objects = await this.getObjects();
+    const affectedObjects = objects.filter(obj => obj.tags.includes(tagName));
+
+    for (const obj of affectedObjects) {
+      obj.tags = obj.tags.filter(tag => tag !== tagName);
+      await this.saveObject(obj);
+    }
+
+    // Delete tag config
+    await this.deleteTagConfig(tagName);
   }
 
   async initializeDefaultSchemas(): Promise<void> {

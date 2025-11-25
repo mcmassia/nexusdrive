@@ -5,6 +5,7 @@ import Editor from './components/Editor';
 import Dashboard from './components/Dashboard';
 import DocumentsView from './components/DocumentsView';
 import TypeManager from './components/TypeManager';
+import TagsManager from './components/TagsManager';
 import AISearchModal from './components/AISearchModal';
 import LoginScreen from './components/LoginScreen';
 import RightPanel from './components/RightPanel';
@@ -20,7 +21,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(authService.getUser());
 
   // App State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'documents' | 'list' | 'graph' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'documents' | 'list' | 'graph' | 'settings' | 'tags'>('dashboard');
   const [filterType, setFilterType] = useState<NexusType | null>(null);
   const [selectedObject, setSelectedObject] = useState<NexusObject | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -400,6 +401,12 @@ const App: React.FC = () => {
             {
               currentView === 'settings' && (
                 <TypeManager />
+              )
+            }
+
+            {
+              currentView === 'tags' && (
+                <TagsManager lang={lang} />
               )
             }
 

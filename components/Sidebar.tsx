@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid, FileText, Users, Calendar, Briefcase, Settings, Database, Cloud, Moon, Sun, Home, ChevronLeft, ChevronRight, Globe, Network } from 'lucide-react';
+import { LayoutGrid, FileText, Users, Calendar, Briefcase, Settings, Database, Cloud, Moon, Sun, Home, ChevronLeft, ChevronRight, Globe, Network, Tag } from 'lucide-react';
 import { NexusType, NexusObject } from '../types';
 import { db } from '../services/db';
 import { TYPE_CONFIG, TRANSLATIONS } from '../constants';
 
 interface SidebarProps {
-  currentView: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings';
-  onViewChange: (view: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings') => void;
+  currentView: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags';
+  onViewChange: (view: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags') => void;
   onTypeFilter: (type: NexusType | null) => void;
   onObjectSelect: (obj: NexusObject) => void;
   isDarkMode: boolean;
@@ -111,10 +111,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
         {/* Divider */}
         <div className="my-2 border-t border-slate-200 dark:border-slate-700" />
 
-        {/* 5. SETTINGS */}
+        {/* 5. TAGS */}
+        <button onClick={() => onViewChange('tags')} className={navItemClass('tags')} title={lang === 'es' ? 'Etiquetas' : 'Tags'}>
+          <Tag size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Etiquetas' : 'Tags'}</span>}
+        </button>
+        {/* 6. SETTINGS */}
         <button onClick={() => onViewChange('settings')} className={navItemClass('settings')} title={lang === 'es' ? 'Configuración' : 'Settings'}>
-          <Settings size={20} />
-          {!isCollapsed && <span>{lang === 'es' ? 'Configuración' : 'Settings'}</span>}
+          <Settings size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Configuración' : 'Settings'}</span>}
         </button>
       </nav>
 
