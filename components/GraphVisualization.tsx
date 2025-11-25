@@ -32,6 +32,17 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, links, o
       .attr("viewBox", [0, 0, width, height])
       .attr("style", "max-width: 100%; height: auto;");
 
+    // Zoom behavior
+    const g = svg.append("g");
+
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
+
     // Simulation setup
     const simulation = d3.forceSimulation<GraphNode>(nodes)
       .force("link", d3.forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(100))
@@ -40,7 +51,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, links, o
       .force("collide", d3.forceCollide(30));
 
     // Render links
-    const link = svg.append("g")
+    const link = g.append("g")
       .attr("stroke", linkColor)
       .attr("stroke-opacity", 0.6)
       .selectAll("line")
@@ -49,7 +60,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ nodes, links, o
       .attr("stroke-width", 1.5);
 
     // Render nodes
-    const node = svg.append("g")
+    const node = g.append("g")
       .attr("stroke", strokeColor)
       .attr("stroke-width", 1.5)
       .selectAll("g")
