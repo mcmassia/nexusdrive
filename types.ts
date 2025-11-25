@@ -16,6 +16,23 @@ export interface NexusProperty {
   options?: string[]; // For multiselect/select type
 }
 
+export interface BacklinkContext {
+  sourceDocId: string;
+  sourceDocTitle: string;
+  sourceDocType: string;
+  sourceDocDate: Date;
+  mentionContexts: MentionContext[];
+}
+
+export interface MentionContext {
+  contextText: string;
+  mentionPosition: number;
+  blockId?: string;
+  timestamp: Date;
+}
+
+// Configuration for object types
+
 export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select';
 
 export interface PropertyDefinition {

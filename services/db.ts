@@ -1,5 +1,5 @@
-import { openDB, IDBPDatabase, deleteDB, DBSchema } from 'idb';
-import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition } from '../types';
+import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
+import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext } from '../types';
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
@@ -326,10 +326,86 @@ class LocalDatabase {
           }
         }
       }
-    }
+    } // This brace was missing, closing the 'for (const obj of objects)' loop.
 
     console.log(`[LocalDB] Graph: ${nodes.length} nodes, ${links.length} valid links`);
     return { nodes, links };
+  }
+
+  async getBacklinksWithContext(targetDocId: string): Promise<BacklinkContext[]> {
+    const allDocs = await this.getObjects();
+    const backlinks: BacklinkContext[] = [];
+
+    for (const doc of allDocs) {
+      if (doc.id === targetDocId) continue;
+
+      // Parse HTML content to find mentions
+      const parser = new DOMParser();
+      const htmlDoc = parser.parseFromString(doc.content, 'text/html');
+
+      // Find all mentions of the target document
+      const mentions = htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`);
+
+      if (mentions.length > 0) {
+        const contexts: MentionContext[] = [];
+
+        mentions.forEach((mention, index) => {
+          // Get parent block (paragraph, list item, div, heading)
+          let block = mention.closest('p, li, div[class*="block"], h1, h2, h3, h4, h5, h6');
+
+          // If no specific block found, try to get a reasonable text context
+          if (!block) {
+            block = mention.parentElement;
+          }
+
+          if (block) {
+            let contextText = block.textContent || '';
+
+            // Clean up extra whitespace
+            contextText = contextText.replace(/\s+/g, ' ').trim();
+
+            // Limit context length to avoid very long blocks
+            if (contextText.length > 300) {
+              // Try to find mention position and show context around it
+              const mentionText = mention.textContent || '';
+              const mentionPos = contextText.indexOf(mentionText);
+
+              if (mentionPos !== -1) {
+                // Show 100 chars before and after mention
+                const start = Math.max(0, mentionPos - 100);
+                const end = Math.min(contextText.length, mentionPos + mentionText.length + 100);
+                contextText = (start > 0 ? '...' : '') + contextText.slice(start, end) + (end < contextText.length ? '...' : '');
+              } else {
+                contextText = contextText.slice(0, 300) + '...';
+              }
+            }
+
+            contexts.push({
+              contextText,
+              mentionPosition: index,
+              blockId: block.id || undefined,
+              timestamp: new Date()
+            });
+          }
+        });
+
+        if (contexts.length > 0) {
+          backlinks.push({
+            sourceDocId: doc.id,
+            sourceDocTitle: doc.title,
+            sourceDocType: doc.type,
+            sourceDocDate: doc.lastModified,
+            mentionContexts: contexts
+          });
+        }
+      }
+    }
+
+    // Sort by date (most recent first)
+    backlinks.sort((a, b) => new Date(b.sourceDocDate).getTime() - new Date(a.sourceDocDate).getTime());
+
+    console.log(`[LocalDB] Found ${backlinks.length} documents with ${backlinks.reduce((sum, b) => sum + b.mentionContexts.length, 0)} mentions of doc ${targetDocId}`);
+    return backlinks;
   }
 
   /**

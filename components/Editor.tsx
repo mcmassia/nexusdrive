@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
+import BacklinksPanel from './BacklinksPanel';
 import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
@@ -23,39 +24,21 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
     const [content, setContent] = useState(object.content);
     const [isSaving, setIsSaving] = useState(false);
     const [typeSchema, setTypeSchema] = useState<TypeSchema | undefined>(undefined);
-    const [backlinks, setBacklinks] = useState<string[]>([]);
     const [objects, setObjects] = useState<NexusObject[]>([]);
 
     useEffect(() => {
         setCurrentObject(object);
         setContent(object.content);
-    }, [object.id]);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            // Fetch all objects first to resolve titles
-            const allObjects = await db.getObjects();
-            setObjects(allObjects);
+        // Load type schema for this object type
+        db.getAllTypeSchemas().then(schemas => {
+            const schema = schemas.find(s => s.type === object.type);
+            setTypeSchema(schema);
+        });
 
-            // Fetch schema for the object type
-            const schema = await db.getTypeSchema(currentObject.type);
-            if (schema) {
-                setTypeSchema(schema);
-            }
-
-            // Fetch backlinks
-            const { links } = await db.getGraphData();
-            const sources = links
-                .filter(l => (typeof l.target === 'object' ? l.target.id : l.target) === currentObject.id)
-                .map(l => {
-                    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-                    const sourceObj = allObjects.find(o => o.id === sourceId);
-                    return sourceObj ? sourceObj.title : sourceId;
-                });
-            setBacklinks(sources as string[]);
-        };
-        fetchData();
-    }, [currentObject.id]);
+        // Load all objects for navigation
+        db.getObjects().then(setObjects);
+    }, [object]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -216,43 +199,18 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                 </div>
             </div>
 
-            {/* Right Sidebar: Context & Backlinks */}
-            <div className="w-64 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">{t.linkedRefs}</h3>
-                {backlinks.length > 0 ? (
-                    <ul className="space-y-3">
-                        {backlinks.map((source, i) => (
-                            <li key={i} className="text-sm bg-white dark:bg-slate-900 p-2 rounded shadow-sm border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                                <span className="font-medium text-blue-600 dark:text-blue-400 block mb-1">Linked from:</span>
-                                <button
-                                    onClick={async () => {
-                                        // Find the object by title (since backlinks currently stores titles)
-                                        // TODO: Refactor backlinks to store full objects for better reliability
-                                        const obj = objects.find(o => o.title === source);
-                                        if (obj) {
-                                            await handleSave();
-                                            onSave(obj);
-                                        }
-                                    }}
-                                    className="text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left w-full"
-                                >
-                                    {source}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-sm text-slate-400 italic">{t.noBacklinks}</p>
-                )}
-
-                <div className="mt-8">
-                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">{t.context}</h3>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                        <p className="mb-2">{t.created}: {new Date(currentObject.lastModified).toLocaleDateString()}</p>
-                        <p>{t.path}: {`/ My Drive / Nexus / ${currentObject.type} s / `}</p>
-                    </div>
-                </div>
-            </div>
+            {/* RIGHT SIDEBAR: Backlinks with Context */}
+            <BacklinksPanel
+                targetDocId={currentObject.id}
+                onNavigate={(docId) => {
+                    const obj = objects.find(o => o.id === docId);
+                    if (obj) {
+                        handleSave();
+                        onSave(obj);
+                    }
+                }}
+                lang={lang}
+            />
         </div>
     );
 };
