@@ -67,8 +67,8 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
 
     if (isLoading) {
         return (
-            <div className="w-64 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
+            <div className="w-96 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">
                     {t.linkedRefs}
                 </h3>
                 <p className="text-sm text-slate-400 italic">Loading...</p>
@@ -77,22 +77,27 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
     }
 
     return (
-        <div className="w-64 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
-            <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
-                {t.linkedRefs} ({totalMentions})
-            </h3>
+        <div className="w-96 border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-6 overflow-y-auto hidden lg:block transition-colors no-scrollbar">
+            <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    {t.linkedRefs}
+                </h3>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded-full">
+                    {totalMentions}
+                </span>
+            </div>
 
             {backlinks.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-5">
                     {backlinks.map((backlink) => (
-                        <div key={backlink.sourceDocId} className="space-y-2">
-                            {/* Date header */}
-                            <div className="flex items-center gap-2 pb-1 border-b border-slate-200 dark:border-slate-800">
-                                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <div key={backlink.sourceDocId} className="space-y-2.5">
+                            {/* Date header with type badge */}
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                                <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
                                     {formatDate(backlink.sourceDocDate)}
                                 </span>
                                 <span
-                                    className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded"
+                                    className="text-xs font-bold uppercase px-2.5 py-1 rounded-md shadow-sm"
                                     style={{
                                         backgroundColor: getTypeColor(backlink.sourceDocType),
                                         color: 'white'
@@ -107,16 +112,19 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
                                 <button
                                     key={idx}
                                     onClick={() => onNavigate(backlink.sourceDocId)}
-                                    className="w-full text-left p-2 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all group"
+                                    className="w-full text-left p-3.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all group"
                                 >
                                     {/* Source title */}
-                                    <div className="text-xs font-medium text-blue-600 dark:text-blue-400 group-hover:underline mb-1">
-                                        {backlink.sourceDocTitle}
+                                    <div className="flex items-start gap-2 mb-2">
+                                        <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: getTypeColor(backlink.sourceDocType) }}></div>
+                                        <div className="text-sm font-semibold text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 group-hover:underline leading-snug">
+                                            {backlink.sourceDocTitle}
+                                        </div>
                                     </div>
 
-                                    {/* Context text */}
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                                        {context.contextText}
+                                    {/* Context text with better readability */}
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pl-3.5">
+                                        "{context.contextText}"
                                     </p>
                                 </button>
                             ))}
@@ -124,10 +132,13 @@ const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ targetDocId, onNavigate
                     ))}
                 </div>
             ) : (
-                <p className="text-sm text-slate-400 italic">{t.noBacklinks}</p>
+                <div className="text-center py-12">
+                    <p className="text-sm text-slate-400 italic">{t.noBacklinks}</p>
+                </div>
             )}
         </div>
     );
 };
 
 export default BacklinksPanel;
+
