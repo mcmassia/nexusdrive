@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table } from 'lucide-react';
 import { db } from '../services/db';
-import { NexusObject, NexusType } from '../types';
+import { NexusObject, NexusType, TagConfig } from '../types';
 
 interface RichEditorProps {
   initialContent: string;
@@ -27,6 +27,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUserEditing, setIsUserEditing] = useState(false);
+  const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
 
   // Parse natural date expressions
   const parseDateExpression = (expr: string): NexusObject | null => {
@@ -80,6 +81,17 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
     return null;
   };
+
+  // Load tag configurations on mount
+  useEffect(() => {
+    const loadTagConfigs = async () => {
+      const configs = await db.getAllTagConfigs();
+      const configMap = new Map<string, TagConfig>();
+      configs.forEach(config => configMap.set(config.name, config));
+      setTagConfigs(configMap);
+    };
+    loadTagConfigs();
+  }, []);
 
   // Only update content if significantly different AND user is not actively editing
   useEffect(() => {
@@ -365,7 +377,13 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     tagElement.contentEditable = 'false';
     tagElement.className = 'nexus-tag';
     tagElement.textContent = `#${tag}`;
-    tagElement.style.cssText = 'background: rgb(16, 185, 129); color: white; padding: 2px 6px; border-radius: 4px; cursor: pointer; margin: 0 2px;';
+
+    // Get color from tag config or use default
+    const config = tagConfigs.get(tag);
+    const tagColor = config?.color || '#10b981'; // Default green
+
+    tagElement.style.cssText = `background: ${tagColor}; color: white; padding: 2px 6px; border-radius: 4px; cursor: pointer; margin: 0 2px;`;
+
 
     // Create a new range at the correct insertion point
     const newRange = document.createRange();
