@@ -26,6 +26,8 @@ const App: React.FC = () => {
   const [selectedObject, setSelectedObject] = useState<NexusObject | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
+
 
   // Language State
   const [lang, setLang] = useState<'en' | 'es'>('en');
@@ -139,8 +141,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleNodeClick = async (nodeId: string) => {
-    const obj = await db.getObjectById(nodeId);
-    if (obj) setSelectedObject(obj);
+    const obj = objects.find(o => o.id === nodeId);
+    if (obj) {
+      setSelectedObject(obj);
+      setCurrentView('dashboard');
+    }
+  };
+
+  // Handle tag click - navigate to tags view with filter
+  const handleTagClick = (tagName: string) => {
+    setTagsSearchQuery(tagName);
+    setCurrentView('tags');
+    setSelectedObject(null);
   };
 
   const createNewObject = async (type: NexusType, title: string) => {
@@ -406,7 +418,14 @@ const App: React.FC = () => {
 
             {
               currentView === 'tags' && (
-                <TagsManager lang={lang} onNavigate={setSelectedObject} />
+                <TagsManager
+                  lang={lang}
+                  onNavigate={(doc) => {
+                    setSelectedObject(doc);
+                    setTagsSearchQuery(''); // Clear filter after navigation
+                  }}
+                  initialSearchQuery={tagsSearchQuery}
+                />
               )
             }
 
@@ -468,18 +487,19 @@ const App: React.FC = () => {
               <div className="absolute inset-0 z-20 bg-white dark:bg-slate-900">
                 <Editor
                   object={selectedObject}
-                  onClose={() => setSelectedObject(null)}
-                  onSave={(updated) => {
-                    setSelectedObject(updated);
+                  onSave={async (obj) => {
+                    await db.saveObject(obj);
                     loadData();
                   }}
+                  onClose={() => setSelectedObject(null)}
+                  lang={lang}
                   onNavigateToDocuments={(filterType) => {
                     // Navigate to Documents view with type filter
                     setCurrentView('documents');
                     setDocumentsTypeFilter(filterType || null);
                     setSelectedObject(null);
                   }}
-                  lang={lang}
+                  onTagClick={handleTagClick}
                   onDelete={async (id) => {
                     await db.deleteObject(id);
                     setSelectedObject(null);

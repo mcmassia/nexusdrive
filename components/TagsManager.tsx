@@ -6,9 +6,10 @@ import { Tag, Edit2, Trash2, Search, Plus, Check, X, Merge, FileText } from 'luc
 interface TagsManagerProps {
     lang: 'en' | 'es';
     onNavigate?: (doc: NexusObject) => void;
+    initialSearchQuery?: string;
 }
 
-const TagsManager: React.FC<TagsManagerProps> = ({ lang, onNavigate }) => {
+const TagsManager: React.FC<TagsManagerProps> = ({ lang, onNavigate, initialSearchQuery }) => {
     const [allTags, setAllTags] = useState<string[]>([]);
     const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
     const [tagStats, setTagStats] = useState<Map<string, number>>(new Map());
@@ -68,6 +69,13 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang, onNavigate }) => {
     useEffect(() => {
         loadTags();
     }, []);
+
+    // Apply initial search query if provided
+    useEffect(() => {
+        if (initialSearchQuery) {
+            setSearchQuery(initialSearchQuery);
+        }
+    }, [initialSearchQuery]);
 
     const loadTags = async () => {
         const stats = await db.getTagStats();

@@ -16,9 +16,10 @@ interface EditorProps {
     objects?: NexusObject[]; // Made optional
     lang: 'en' | 'es';
     onNavigateToDocuments?: (filterType?: string) => void;
+    onTagClick?: (tagName: string) => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments }) => {
+const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments, onTagClick }) => {
     const t = TRANSLATIONS[lang];
     const [currentObject, setCurrentObject] = useState<NexusObject>(object);
     const [content, setContent] = useState(object.content);
