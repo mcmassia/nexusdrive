@@ -151,6 +151,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             const newTags = currentObject.tags.filter(t => t !== tag);
                             setCurrentObject({ ...currentObject, tags: newTags });
                         }}
+                        onTagClick={onTagClick}
                         allObjects={objects}
                         typeSchema={typeSchema}
                         onDocumentClick={async (docId) => {

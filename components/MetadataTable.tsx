@@ -6,12 +6,13 @@ interface MetadataTableProps {
   object: NexusObject;
   onChange: (updatedMetadata: NexusProperty[]) => void;
   onTagRemove?: (tag: string) => void;
+  onTagClick?: (tag: string) => void;
   allObjects?: NexusObject[];
   typeSchema?: TypeSchema; // Added typeSchema prop
   onDocumentClick?: (documentId: string) => void; // New prop for document navigation
 }
 
-const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, allObjects = [], typeSchema, onDocumentClick }) => { // Destructured onDocumentClick
+const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, onDocumentClick }) => { // Destructured onDocumentClick
   const [suggestionBox, setSuggestionBox] = React.useState<{
     visible: boolean;
     top: number;
@@ -303,14 +304,18 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
                 {object.tags.map(tag => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-sm group"
+                    onClick={() => onTagClick && onTagClick(tag)}
+                    className="px-3 py-1 rounded-full text-white font-semibold text-sm flex items-center gap-2 group cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ backgroundColor: '#10b981' }}
                   >
                     #{tag}
                     {onTagRemove && (
                       <button
-                        onClick={() => onTagRemove(tag)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 dark:hover:text-red-400"
-                        title="Remove tag"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent tag click when removing
+                          onTagRemove(tag);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:bg-white/20 rounded px-1 transition-opacity"
                       >
                         ×
                       </button>
