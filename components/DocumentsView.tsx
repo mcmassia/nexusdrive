@@ -10,12 +10,15 @@ interface DocumentsViewProps {
     onRefresh?: () => void;
     initialTypeFilter?: string | null;
     lang: 'en' | 'es';
+    availableTypes: TypeSchema[];
 }
 
 type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc' | 'type';
 type ViewMode = 'table' | 'cards';
 
-const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, onRefresh, initialTypeFilter, lang }) => {
+import { TypeSchema } from '../types';
+
+const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, onRefresh, initialTypeFilter, lang, availableTypes }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState<NexusType | 'all'>(
         (initialTypeFilter as NexusType) || 'all'
@@ -243,10 +246,11 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                     className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
                 >
                     <option value="all">{lang === 'es' ? 'Todos los tipos' : 'All types'}</option>
-                    <option value={NexusType.PAGE}>{lang === 'es' ? 'Páginas' : 'Pages'}</option>
-                    <option value={NexusType.PERSON}>{lang === 'es' ? 'Personas' : 'People'}</option>
-                    <option value={NexusType.MEETING}>{lang === 'es' ? 'Reuniones' : 'Meetings'}</option>
-                    <option value={NexusType.PROJECT}>{lang === 'es' ? 'Proyectos' : 'Projects'}</option>
+                    {availableTypes.map(schema => (
+                        <option key={schema.type} value={schema.type}>
+                            {schema.type}
+                        </option>
+                    ))}
                 </select>
 
                 {/* Tag Filter */}

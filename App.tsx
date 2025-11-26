@@ -238,6 +238,7 @@ const App: React.FC = () => {
         lang={lang}
         setLang={setLang}
         objects={objects}
+        availableTypes={availableTypes}
       />
 
       <div className="flex-1 flex flex-col relative">
@@ -467,6 +468,7 @@ const App: React.FC = () => {
                   onRefresh={loadData}
                   initialTypeFilter={documentsTypeFilter}
                   lang={lang}
+                  availableTypes={availableTypes}
                 />
               )
             }
@@ -535,6 +537,7 @@ const App: React.FC = () => {
                     setSelectedObject(null);
                     loadData();
                   }}
+                  onNavigate={(obj) => setSelectedObject(obj)}
                 />
               </div>
             )}
@@ -556,6 +559,7 @@ const App: React.FC = () => {
                 setSelectedObject(obj);
                 setIsSearchOpen(false);
               }}
+              lang={lang}
             />
           )
         }

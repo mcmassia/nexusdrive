@@ -261,17 +261,112 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           </div>
         );
 
-      default: // text
+      case 'url':
         return (
-          <div className="relative group">
+          <div className="flex gap-2">
             <input
               type="text"
               value={prop.value as string}
               onChange={(e) => handleValueChange(index, e.target.value)}
-              className="w-full bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
-              placeholder="Empty"
+              className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
+              placeholder="https://..."
             />
-            {renderSuggestions()}
+            {prop.value && (
+              <a
+                href={prop.value as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs flex items-center"
+              >
+                Open ↗
+              </a>
+            )}
+          </div>
+        );
+
+      case 'email':
+        return (
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={prop.value as string}
+              onChange={(e) => handleValueChange(index, e.target.value)}
+              className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
+              placeholder="example@email.com"
+            />
+            {prop.value && (
+              <a
+                href={`mailto:${prop.value}`}
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs flex items-center"
+              >
+                Email ✉
+              </a>
+            )}
+          </div>
+        );
+
+      case 'phone':
+        return (
+          <div className="flex gap-2">
+            <input
+              type="tel"
+              value={prop.value as string}
+              onChange={(e) => handleValueChange(index, e.target.value)}
+              className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
+              placeholder="+1 234 567 890"
+            />
+            {prop.value && (
+              <a
+                href={`tel:${prop.value}`}
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs flex items-center"
+              >
+                Call 📞
+              </a>
+            )}
+          </div>
+        );
+
+      case 'checkbox':
+        return (
+          <div className="flex items-center h-full">
+            <input
+              type="checkbox"
+              checked={prop.value === 'true'}
+              onChange={(e) => handleValueChange(index, e.target.checked ? 'true' : 'false')}
+              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
+        );
+
+      default: // text
+        const isUrl = typeof prop.value === 'string' && (prop.value.startsWith('http://') || prop.value.startsWith('https://'));
+
+        return (
+          <div className="relative group flex gap-2">
+            <input
+              type="text"
+              value={prop.value as string}
+              onChange={(e) => handleValueChange(index, e.target.value)}
+              onClick={(e) => {
+                if (isUrl && (e.metaKey || e.ctrlKey)) {
+                  window.open(prop.value as string, '_blank');
+                }
+              }}
+              className={`w-full bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200 ${isUrl ? 'hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer' : ''}`}
+              placeholder="Empty"
+              title={isUrl ? "Cmd+Click to open link" : ""}
+            />
+            {isUrl && (
+              <a
+                href={prop.value as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs flex items-center shrink-0"
+              >
+                Open ↗
+              </a>
+            )}
+            {!isUrl && renderSuggestions()}
           </div>
         );
     }

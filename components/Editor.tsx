@@ -11,15 +11,16 @@ import { TRANSLATIONS } from '../constants';
 interface EditorProps {
     object: NexusObject;
     onSave: (obj: NexusObject) => void;
-    onClose: () => void; // Changed from onBack to match App.tsx
-    onDelete?: (id: string) => void; // Made optional as it's not passed from App.tsx yet
-    objects?: NexusObject[]; // Made optional
+    onClose: () => void;
+    onDelete?: (id: string) => void;
+    objects?: NexusObject[];
     lang: 'en' | 'es';
     onNavigateToDocuments?: (filterType?: string) => void;
     onTagClick?: (tagName: string) => void;
+    onNavigate?: (obj: NexusObject) => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments, onTagClick }) => {
+const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments, onTagClick, onNavigate }) => {
     const t = TRANSLATIONS[lang];
     const [currentObject, setCurrentObject] = useState<NexusObject>(object);
     const [content, setContent] = useState(object.content);
@@ -158,7 +159,11 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             const obj = await db.getObjectById(docId);
                             if (obj) {
                                 await handleSave();
-                                onSave(obj);
+                                if (onNavigate) {
+                                    onNavigate(obj);
+                                } else {
+                                    onSave(obj);
+                                }
                             }
                         }}
                         lang={lang}
@@ -189,13 +194,32 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                                 "
                             onTagClick={onTagClick}
                             onMentionClick={async (objectId) => {
+                                console.log('[Editor] Mention clicked:', objectId);
                                 // Open the mentioned document
                                 const obj = await db.getObjectById(objectId);
+                                console.log('[Editor] Resolved object:', obj?.title, obj?.id);
+
                                 if (obj) {
+                                    if (obj.id === currentObject.id) {
+                                        console.log('[Editor] Clicked link to current document (self-link). Ignoring.');
+                                        return;
+                                    }
+
+                                    console.log('[Editor] Saving current document before navigation...');
                                     // Save current document first
                                     await handleSave();
-                                    // Then notify parent to open the new one
-                                    onSave(obj);
+
+                                    // Navigate to new object
+                                    if (onNavigate) {
+                                        console.log('[Editor] Calling onNavigate with:', obj.title);
+                                        onNavigate(obj);
+                                    } else {
+                                        console.warn('[Editor] onNavigate prop missing! Fallback to onSave.');
+                                        onSave(obj);
+                                    }
+                                } else {
+                                    console.error('[Editor] Could not find object with ID:', objectId);
+                                    alert('Document not found');
                                 }
                             }}
                         />
@@ -206,17 +230,22 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
             {/* BACKLINKS PANEL: Full width below editor */}
             <BacklinksPanel
                 targetDocId={currentObject.id}
-                onNavigate={(docId, blockId) => {
+                onNavigate={async (docId, blockId) => {
                     const obj = objects.find(o => o.id === docId);
                     if (obj) {
-                        handleSave();
-                        onSave(obj);
-                        // TODO: Scroll to blockId after document loads
+                        // Await save to prevent state reversion race condition
+                        await handleSave();
+
+                        if (onNavigate) {
+                            onNavigate(obj);
+                        } else {
+                            onSave(obj);
+                        }
+
+                        // Optional: Scroll to specific block if blockId is provided
+                        // This would require passing blockId to the new view state or handling it in App.tsx
                         if (blockId) {
-                            setTimeout(() => {
-                                const element = document.getElementById(blockId);
-                                element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }, 100);
+                            console.log('Navigating to block:', blockId);
                         }
                     }
                 }}

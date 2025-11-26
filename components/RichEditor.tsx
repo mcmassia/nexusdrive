@@ -443,6 +443,70 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       const text = textNode.textContent;
       const cursorPos = range.startOffset;
 
+      // Markdown Input Handling
+      // Check if we just typed a space
+      if (text.endsWith(' ') && cursorPos === text.length) {
+        const lineText = text.trimEnd(); // Text without the trailing space
+
+        // Headers
+        if (lineText === '#') {
+          execCommand('formatBlock', '<h1>');
+          // Remove the markdown characters
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+        if (lineText === '##') {
+          execCommand('formatBlock', '<h2>');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+        if (lineText === '###') {
+          execCommand('formatBlock', '<h3>');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+
+        // Lists
+        if (lineText === '-' || lineText === '*') {
+          execCommand('insertUnorderedList');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+        if (lineText === '1.') {
+          execCommand('insertOrderedList');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+
+        // Blockquote
+        if (lineText === '>') {
+          execCommand('formatBlock', '<blockquote>');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+
+        // Code Block
+        if (lineText === '```') {
+          execCommand('formatBlock', '<pre>');
+          const newRange = document.createRange();
+          newRange.selectNodeContents(textNode);
+          newRange.deleteContents();
+          return;
+        }
+      }
+
       // Look for @ or # before cursor
       const beforeCursor = text.substring(0, cursorPos);
       const lastAt = beforeCursor.lastIndexOf('@');
@@ -501,6 +565,17 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         e.preventDefault();
         e.stopPropagation();
         onTagClick(tagText);
+      }
+    }
+
+    // Handle External Links
+    const link = target.tagName === 'A' ? target as HTMLAnchorElement : target.closest('a');
+    if (link && !link.classList.contains('nexus-mention') && link.href) {
+      // It's a standard link (external)
+      if (e.metaKey || e.ctrlKey || !isUserEditing) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(link.href, '_blank');
       }
     }
   };

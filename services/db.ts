@@ -655,13 +655,19 @@ class LocalDatabase {
    */
   async vectorSearch(query: string): Promise<NexusObject[]> {
     const objects = await this.getObjects();
-    const lowerQuery = query.toLowerCase();
 
-    return objects.filter(obj =>
-      obj.title.toLowerCase().includes(lowerQuery) ||
-      obj.content.toLowerCase().includes(lowerQuery) ||
-      obj.tags.some(t => t.toLowerCase().includes(lowerQuery))
-    );
+    // Normalize query: remove accents/diacritics and lowercase
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const normalizedQuery = normalize(query);
+
+    return objects.filter(obj => {
+      const title = normalize(obj.title);
+      const content = normalize(obj.content);
+      // Check title, content, and tags
+      return title.includes(normalizedQuery) ||
+        content.includes(normalizedQuery) ||
+        obj.tags.some(t => normalize(t).includes(normalizedQuery));
+    });
   }
 
   // Dashboard methods

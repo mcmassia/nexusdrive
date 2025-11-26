@@ -12,7 +12,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ schema, onSave, onCance
     const [editedSchema, setEditedSchema] = useState<TypeSchema>(schema);
     const [newPropertyKey, setNewPropertyKey] = useState('');
 
-    const propertyTypes: PropertyType[] = ['text', 'number', 'date', 'document', 'documents', 'multiselect', 'select'];
+    const propertyTypes: PropertyType[] = ['text', 'number', 'date', 'document', 'documents', 'multiselect', 'select', 'url', 'email', 'phone', 'checkbox'];
     const availableTypes = Object.values(NexusType);
 
     const addProperty = () => {
@@ -138,7 +138,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ schema, onSave, onCance
                                 </div>
 
                                 {/* Default Value */}
-                                {(prop.type === 'text' || prop.type === 'number') && (
+                                {(prop.type === 'text' || prop.type === 'number' || prop.type === 'url' || prop.type === 'email' || prop.type === 'phone') && (
                                     <div>
                                         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                                             Default Value
@@ -150,6 +150,20 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ schema, onSave, onCance
                                             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded text-sm"
                                             placeholder="Optional"
                                         />
+                                    </div>
+                                )}
+
+                                {prop.type === 'checkbox' && (
+                                    <div className="flex items-center gap-2 mt-6">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={prop.defaultValue === 'true'}
+                                                onChange={(e) => updateProperty(index, { defaultValue: e.target.checked ? 'true' : 'false' })}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm text-slate-600 dark:text-slate-400">Default Checked</span>
+                                        </label>
                                     </div>
                                 )}
 

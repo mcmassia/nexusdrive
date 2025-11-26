@@ -216,329 +216,331 @@ const TagsManager: React.FC<TagsManagerProps> = ({ lang, onNavigate, initialSear
     ];
 
     return (
-        <div className="p-8 max-w-6xl mx-auto pb-24">
-            {/* Header */}
-            <div className="mb-8 flex items-center justify-between">
-                <div>
-                    <div className="flex items-center gap-3 mb-2">
-                        <Tag className="text-slate-600 dark:text-slate-400" size={32} />
-                        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">{t.title}</h1>
+        <div className="h-full overflow-y-auto p-8 pb-24">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="mb-8 flex items-center justify-between">
+                    <div>
+                        <div className="flex items-center gap-3 mb-2">
+                            <Tag className="text-slate-600 dark:text-slate-400" size={32} />
+                            <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">{t.title}</h1>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-400">{t.subtitle}</p>
                     </div>
-                    <p className="text-slate-600 dark:text-slate-400">{t.subtitle}</p>
+
+                    <div className="flex gap-2">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex">
+                            <button
+                                onClick={() => setActiveTab('manage')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'manage'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                                    }`}
+                            >
+                                {t.manage}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('analytics')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'analytics'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                                    }`}
+                            >
+                                {t.analytics}
+                            </button>
+                        </div>
+
+                        {activeTab === 'manage' && (
+                            <button
+                                onClick={() => {
+                                    setIsSelectionMode(!isSelectionMode);
+                                    setSelectedTags(new Set());
+                                }}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${isSelectionMode
+                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
+                            >
+                                {isSelectionMode ? t.cancelSelection : t.select}
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex gap-2">
-                    <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex">
-                        <button
-                            onClick={() => setActiveTab('manage')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'manage'
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                                }`}
-                        >
-                            {t.manage}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('analytics')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'analytics'
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                                }`}
-                        >
-                            {t.analytics}
-                        </button>
-                    </div>
-
-                    {activeTab === 'manage' && (
-                        <button
-                            onClick={() => {
-                                setIsSelectionMode(!isSelectionMode);
-                                setSelectedTags(new Set());
-                            }}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${isSelectionMode
-                                ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                        >
-                            {isSelectionMode ? t.cancelSelection : t.select}
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {activeTab === 'analytics' ? (
-                <TagAnalytics lang={lang} />
-            ) : (
-                <>
-                    {/* Search and Sort */}
-                    <div className="mb-6 flex gap-4 items-center">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            <input
-                                type="text"
-                                placeholder={t.search}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
+                {activeTab === 'analytics' ? (
+                    <TagAnalytics lang={lang} />
+                ) : (
+                    <>
+                        {/* Search and Sort */}
+                        <div className="mb-6 flex gap-4 items-center">
+                            <div className="flex-1 relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                <input
+                                    type="text"
+                                    placeholder={t.search}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                                />
+                            </div>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as 'name' | 'usage')}
+                                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            >
+                                <option value="usage">{t.sortByUsage}</option>
+                                <option value="name">{t.sortByName}</option>
+                            </select>
                         </div>
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value as 'name' | 'usage')}
-                            className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                        >
-                            <option value="usage">{t.sortByUsage}</option>
-                            <option value="name">{t.sortByName}</option>
-                        </select>
-                    </div>
 
-                    {/* Tags Grid */}
-                    {sortedTags.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400">
-                            <Tag size={48} className="mx-auto mb-4 opacity-50" />
-                            <p>{t.noTags}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {sortedTags.map(tag => {
-                                const config = tagConfigs.get(tag);
-                                const isEditing = editingTag === tag;
-                                const count = tagStats.get(tag) || 0;
-                                const color = config?.color || '#10b981';
-                                const isSelected = selectedTags.has(tag);
+                        {/* Tags Grid */}
+                        {sortedTags.length === 0 ? (
+                            <div className="text-center py-12 text-slate-400">
+                                <Tag size={48} className="mx-auto mb-4 opacity-50" />
+                                <p>{t.noTags}</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {sortedTags.map(tag => {
+                                    const config = tagConfigs.get(tag);
+                                    const isEditing = editingTag === tag;
+                                    const count = tagStats.get(tag) || 0;
+                                    const color = config?.color || '#10b981';
+                                    const isSelected = selectedTags.has(tag);
 
-                                return (
-                                    <div
-                                        key={tag}
-                                        className={`bg-white dark:bg-slate-900 border rounded-lg p-4 transition-all ${isSelected
-                                            ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                            : 'border-slate-200 dark:border-slate-700'
-                                            }`}
-                                        onClick={() => isSelectionMode && toggleTagSelection(tag)}
-                                    >
-                                        {isEditing ? (
-                                            /* Edit Mode */
-                                            <div className="space-y-3" onClick={e => e.stopPropagation()}>
-                                                <input
-                                                    type="text"
-                                                    value={newName}
-                                                    onChange={(e) => setNewName(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-                                                    placeholder={t.rename}
-                                                />
-
-                                                <div>
-                                                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2">{t.color}</label>
-                                                    <div className="flex gap-2 mb-2">
-                                                        {predefinedColors.map(preColor => (
-                                                            <button
-                                                                key={preColor}
-                                                                onClick={() => setNewColor(preColor)}
-                                                                className={`w-8 h-8 rounded border-2 ${newColor === preColor ? 'border-slate-800 dark:border-slate-200' : 'border-transparent'} `}
-                                                                style={{ backgroundColor: preColor }}
-                                                            />
-                                                        ))}
-                                                    </div>
+                                    return (
+                                        <div
+                                            key={tag}
+                                            className={`bg-white dark:bg-slate-900 border rounded-lg p-4 transition-all ${isSelected
+                                                ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                                : 'border-slate-200 dark:border-slate-700'
+                                                }`}
+                                            onClick={() => isSelectionMode && toggleTagSelection(tag)}
+                                        >
+                                            {isEditing ? (
+                                                /* Edit Mode */
+                                                <div className="space-y-3" onClick={e => e.stopPropagation()}>
                                                     <input
-                                                        type="color"
-                                                        value={newColor}
-                                                        onChange={(e) => setNewColor(e.target.value)}
-                                                        className="w-full h-10 rounded cursor-pointer"
+                                                        type="text"
+                                                        value={newName}
+                                                        onChange={(e) => setNewName(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                                        placeholder={t.rename}
                                                     />
-                                                </div>
 
-                                                <textarea
-                                                    value={newDescription}
-                                                    onChange={(e) => setNewDescription(e.target.value)}
-                                                    placeholder={t.description}
-                                                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm"
-                                                    rows={2}
-                                                />
+                                                    <div>
+                                                        <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2">{t.color}</label>
+                                                        <div className="flex gap-2 mb-2">
+                                                            {predefinedColors.map(preColor => (
+                                                                <button
+                                                                    key={preColor}
+                                                                    onClick={() => setNewColor(preColor)}
+                                                                    className={`w-8 h-8 rounded border-2 ${newColor === preColor ? 'border-slate-800 dark:border-slate-200' : 'border-transparent'} `}
+                                                                    style={{ backgroundColor: preColor }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        <input
+                                                            type="color"
+                                                            value={newColor}
+                                                            onChange={(e) => setNewColor(e.target.value)}
+                                                            className="w-full h-10 rounded cursor-pointer"
+                                                        />
+                                                    </div>
 
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => handleSaveTag(tag)}
-                                                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
-                                                    >
-                                                        <Check size={16} />
-                                                        {t.save}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setEditingTag(null)}
-                                                        className="flex-1 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg flex items-center justify-center gap-2"
-                                                    >
-                                                        <X size={16} />
-                                                        {t.cancel}
-                                                    </button>
+                                                    <textarea
+                                                        value={newDescription}
+                                                        onChange={(e) => setNewDescription(e.target.value)}
+                                                        placeholder={t.description}
+                                                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm"
+                                                        rows={2}
+                                                    />
+
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleSaveTag(tag)}
+                                                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
+                                                        >
+                                                            <Check size={16} />
+                                                            {t.save}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditingTag(null)}
+                                                            className="flex-1 px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg flex items-center justify-center gap-2"
+                                                        >
+                                                            <X size={16} />
+                                                            {t.cancel}
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            /* View Mode */
-                                            <div>
-                                                <div className="flex items-start justify-between mb-3">
-                                                    <div className="flex items-center gap-2">
-                                                        {isSelectionMode && (
-                                                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected
-                                                                ? 'bg-blue-600 border-blue-600 text-white'
-                                                                : 'border-slate-300 dark:border-slate-600'
-                                                                }`}>
-                                                                {isSelected && <Check size={12} />}
+                                            ) : (
+                                                /* View Mode */
+                                                <div>
+                                                    <div className="flex items-start justify-between mb-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {isSelectionMode && (
+                                                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected
+                                                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                                                    : 'border-slate-300 dark:border-slate-600'
+                                                                    }`}>
+                                                                    {isSelected && <Check size={12} />}
+                                                                </div>
+                                                            )}
+                                                            <span
+                                                                className="px-3 py-1 rounded-full text-white font-semibold text-sm"
+                                                                style={{ backgroundColor: color }}
+                                                            >
+                                                                #{tag}
+                                                            </span>
+                                                        </div>
+                                                        {!isSelectionMode && (
+                                                            <div className="flex gap-1">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); startEdit(tag); }}
+                                                                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
+                                                                    title={t.edit}
+                                                                >
+                                                                    <Edit2 size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
+                                                                    className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-600 dark:text-red-400"
+                                                                    title={t.delete}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
                                                             </div>
                                                         )}
-                                                        <span
-                                                            className="px-3 py-1 rounded-full text-white font-semibold text-sm"
-                                                            style={{ backgroundColor: color }}
-                                                        >
-                                                            #{tag}
-                                                        </span>
                                                     </div>
+
+                                                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-2 pl-7">
+                                                        <div className="flex items-center gap-2">
+                                                            <FileText size={14} />
+                                                            <span className="font-semibold">{count}</span> {t.documents}
+                                                        </div>
+                                                    </div>
+
+                                                    {config?.description && (
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 line-clamp-2 pl-7">
+                                                            {config.description}
+                                                        </p>
+                                                    )}
+
                                                     {!isSelectionMode && (
-                                                        <div className="flex gap-1">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); startEdit(tag); }}
-                                                                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400"
-                                                                title={t.edit}
-                                                            >
-                                                                <Edit2 size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
-                                                                className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-600 dark:text-red-400"
-                                                                title={t.delete}
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleViewDocs(tag); }}
+                                                            className="w-full mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                                        >
+                                                            <FileText size={14} />
+                                                            {t.viewDocs}
+                                                        </button>
+                                                    )}
+
+                                                    {config?.created && (
+                                                        <div className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 pl-7">
+                                                            {t.created}: {new Date(config.created).toLocaleDateString()}
                                                         </div>
                                                     )}
                                                 </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
 
-                                                <div className="text-sm text-slate-600 dark:text-slate-400 mb-2 pl-7">
-                                                    <div className="flex items-center gap-2">
-                                                        <FileText size={14} />
-                                                        <span className="font-semibold">{count}</span> {t.documents}
-                                                    </div>
-                                                </div>
+                        {/* Bulk Actions Toolbar */}
+                        {selectedTags.size > 0 && (
+                            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-6 py-3 flex items-center gap-4 z-40">
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                    {selectedTags.size} {t.selected}
+                                </span>
+                                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+                                <button
+                                    onClick={handleBulkMerge}
+                                    className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium text-sm"
+                                >
+                                    <Merge size={18} />
+                                    {t.mergeSelected}
+                                </button>
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 font-medium text-sm"
+                                >
+                                    <Trash2 size={18} />
+                                    {t.deleteSelected}
+                                </button>
+                            </div>
+                        )}
 
-                                                {config?.description && (
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 line-clamp-2 pl-7">
-                                                        {config.description}
-                                                    </p>
-                                                )}
-
-                                                {!isSelectionMode && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleViewDocs(tag); }}
-                                                        className="w-full mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                                                    >
-                                                        <FileText size={14} />
-                                                        {t.viewDocs}
-                                                    </button>
-                                                )}
-
-                                                {config?.created && (
-                                                    <div className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 pl-7">
-                                                        {t.created}: {new Date(config.created).toLocaleDateString()}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Bulk Actions Toolbar */}
-                    {selectedTags.size > 0 && (
-                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-full px-6 py-3 flex items-center gap-4 z-40">
-                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                {selectedTags.size} {t.selected}
-                            </span>
-                            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
-                            <button
-                                onClick={handleBulkMerge}
-                                className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium text-sm"
-                            >
-                                <Merge size={18} />
-                                {t.mergeSelected}
-                            </button>
-                            <button
-                                onClick={handleBulkDelete}
-                                className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 font-medium text-sm"
-                            >
-                                <Trash2 size={18} />
-                                {t.deleteSelected}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Documents Modal */}
-                    {viewingDocs && (
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-                                {/* Modal Header */}
-                                <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-                                    <div className="flex items-center gap-3">
-                                        <span
-                                            className="px-3 py-1 rounded-full text-white font-semibold text-sm"
-                                            style={{ backgroundColor: tagConfigs.get(viewingDocs)?.color || '#10b981' }}
-                                        >
-                                            #{viewingDocs}
-                                        </span>
-                                        <span className="text-slate-600 dark:text-slate-400 text-sm">
-                                            {docsForTag.length} {t.documents}
-                                        </span>
-                                    </div>
-                                    <button
-                                        onClick={() => {
-                                            setViewingDocs(null);
-                                            setDocsForTag([]);
-                                        }}
-                                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-
-                                {/* Documents List */}
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    <div className="space-y-3">
-                                        {docsForTag.map(doc => (
-                                            <div
-                                                key={doc.id}
-                                                onClick={() => {
-                                                    if (onNavigate) {
-                                                        onNavigate(doc);
-                                                        setViewingDocs(null);
-                                                        setDocsForTag([]);
-                                                    }
-                                                }}
-                                                className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group"
+                        {/* Documents Modal */}
+                        {viewingDocs && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                                <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+                                    {/* Modal Header */}
+                                    <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+                                        <div className="flex items-center gap-3">
+                                            <span
+                                                className="px-3 py-1 rounded-full text-white font-semibold text-sm"
+                                                style={{ backgroundColor: tagConfigs.get(viewingDocs)?.color || '#10b981' }}
                                             >
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex-1">
-                                                        <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-1">
-                                                            {doc.title}
-                                                        </h4>
-                                                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                                                            <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
-                                                                {doc.type}
-                                                            </span>
-                                                            <span>
-                                                                {new Date(doc.lastModified).toLocaleDateString()}
-                                                            </span>
+                                                #{viewingDocs}
+                                            </span>
+                                            <span className="text-slate-600 dark:text-slate-400 text-sm">
+                                                {docsForTag.length} {t.documents}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setViewingDocs(null);
+                                                setDocsForTag([]);
+                                            }}
+                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+
+                                    {/* Documents List */}
+                                    <div className="flex-1 overflow-y-auto p-6">
+                                        <div className="space-y-3">
+                                            {docsForTag.map(doc => (
+                                                <div
+                                                    key={doc.id}
+                                                    onClick={() => {
+                                                        if (onNavigate) {
+                                                            onNavigate(doc);
+                                                            setViewingDocs(null);
+                                                            setDocsForTag([]);
+                                                        }
+                                                    }}
+                                                    className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer group"
+                                                >
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-1">
+                                                                {doc.title}
+                                                            </h4>
+                                                            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                                                <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
+                                                                    {doc.type}
+                                                                </span>
+                                                                <span>
+                                                                    {new Date(doc.lastModified).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-                </>
-            )}
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 };

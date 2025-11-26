@@ -14,9 +14,12 @@ interface SidebarProps {
   lang: 'en' | 'es';
   setLang: (lang: 'en' | 'es') => void;
   objects: NexusObject[];
+  availableTypes: TypeSchema[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilter, onObjectSelect, isDarkMode, toggleTheme, lang, setLang, objects }) => {
+import { TypeSchema } from '../types';
+
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilter, onObjectSelect, isDarkMode, toggleTheme, lang, setLang, objects, availableTypes }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const t = TRANSLATIONS[lang];
@@ -75,33 +78,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           {isCollapsed ? '---' : t.types}
         </div>
 
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PAGE); onObjectSelect(null); }} className={navItemClass('pages')} title={t.pages}>
-          <FileText size={18} className="shrink-0" />
-          {!isCollapsed && (
-            <div className="flex items-center justify-between w-full">
-              <span>{t.pages}</span>
-              <span className="text-xs bg-slate-200 dark:bg-slate-800 px-1.5 rounded-full text-slate-500">{getCount(NexusType.PAGE)}</span>
-            </div>
-          )}
-        </button>
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.PERSON); onObjectSelect(null); }} className={navItemClass('people')} title={t.people}>
-          <Users size={18} className="shrink-0" />
-          {!isCollapsed && (
-            <div className="flex items-center justify-between w-full">
-              <span>{t.people}</span>
-              <span className="text-xs bg-slate-200 dark:bg-slate-800 px-1.5 rounded-full text-slate-500">{getCount(NexusType.PERSON)}</span>
-            </div>
-          )}
-        </button>
-        <button onClick={() => { onViewChange('list'); onTypeFilter(NexusType.MEETING); onObjectSelect(null); }} className={navItemClass('meetings')} title={t.meetings}>
-          <Briefcase size={18} className="shrink-0" />
-          {!isCollapsed && (
-            <div className="flex items-center justify-between w-full">
-              <span>{t.meetings}</span>
-              <span className="text-xs bg-slate-200 dark:bg-slate-800 px-1.5 rounded-full text-slate-500">{getCount(NexusType.MEETING)}</span>
-            </div>
-          )}
-        </button>
+        {availableTypes.map(schema => {
+          const type = schema.type as NexusType;
+          const count = objects.filter(o => o.type === type).length;
+          const iconName = TYPE_CONFIG[type]?.icon;
+          const Icon = (iconName === 'User' ? Users :
+            iconName === 'Calendar' ? Calendar :
+              iconName === 'Briefcase' ? Briefcase :
+                FileText);
+
+          return (
+            <button
+              key={type}
+              onClick={() => { onViewChange('list'); onTypeFilter(type); onObjectSelect(null); }}
+              className={navItemClass(type.toLowerCase())}
+              title={type}
+            >
+              <Icon size={18} className="shrink-0" style={{ color: schema.color }} />
+              {!isCollapsed && (
+                <div className="flex items-center justify-between w-full">
+                  <span className="truncate">{type}</span>
+                  <span className="text-xs bg-slate-200 dark:bg-slate-800 px-1.5 rounded-full text-slate-500">{count}</span>
+                </div>
+              )}
+            </button>
+          );
+        })}
         {/* 4. GRAPH */}
         <button onClick={() => { onViewChange('graph'); onObjectSelect(null); }} className={navItemClass('graph')} title={t.graph}>
           <Network size={20} />

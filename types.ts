@@ -12,7 +12,7 @@ export interface NexusProperty {
   key: string;
   label: string;
   value: string | string[]; // string[] for document lists or multiselect
-  type: 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select';
+  type: 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select' | 'url' | 'email' | 'phone' | 'checkbox';
   allowedTypes?: NexusType[]; // For document/documents type
   options?: string[]; // For multiselect/select type
 }
@@ -42,7 +42,7 @@ export interface TagConfig {
 
 // Configuration for object types
 
-export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select';
+export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select' | 'url' | 'email' | 'phone' | 'checkbox';
 
 export interface PropertyDefinition {
   key: string;

@@ -25,30 +25,45 @@ export class GeminiService {
     }
   }
 
-  async generateRAGResponse(query: string, context: NexusObject[]): Promise<string> {
+  async generateRAGResponse(query: string, context: NexusObject[], lang: 'en' | 'es' = 'en'): Promise<string> {
     if (API_KEY === 'DEMO_KEY') {
       // Simulation for UI demo purposes when no key is present
       await new Promise(resolve => setTimeout(resolve, 1500));
-      return `Based on your notes, here is what I found regarding "${query}":\n\n` +
-        context.map(c => `- **${c.title}**: ${c.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}...`).join('\n') +
-        `\n\nThis information was synthesized from ${context.length} relevant objects in your Knowledge Graph.`;
+      const intro = lang === 'es'
+        ? `Basado en tus notas, esto es lo que encontré sobre "${query}":`
+        : `Based on your notes, here is what I found regarding "${query}":`;
+
+      const list = context.map(c =>
+        `<li><strong><a data-object-id="${c.id}" class="nexus-mention">${c.title}</a></strong>: ${c.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}...</li>`
+      ).join('');
+
+      return `<p>${intro}</p><ul>${list}</ul><p>${lang === 'es' ? 'Esta información fue sintetizada de' : 'This information was synthesized from'} ${context.length} ${lang === 'es' ? 'objetos relevantes' : 'relevant objects'}.</p>`;
     }
 
     try {
       // 1. Prepare Context from retrieved objects
       const contextString = context.map(obj =>
-        `Title: ${obj.title}\nType: ${obj.type}\nContent: ${obj.content}\nMetadata: ${JSON.stringify(obj.metadata)}`
+        `ID: ${obj.id}\nTitle: ${obj.title}\nType: ${obj.type}\nContent: ${obj.content}\nMetadata: ${JSON.stringify(obj.metadata)}`
       ).join('\n---\n');
+
+      const languageInstruction = lang === 'es' ? 'Respond in Spanish.' : 'Respond in English.';
 
       const prompt = `You are a helpful knowledge assistant named NexusAI. 
       Use the following context from the user's personal knowledge base to answer their question.
       
+      ${languageInstruction}
+      
+      IMPORTANT FORMATTING RULES:
+      1. Return the answer in clean, readable HTML5 format (do NOT use Markdown).
+      2. Use <h3>, <p>, <ul>, <li> tags for structure.
+      3. When citing a document from the context, YOU MUST use this exact HTML format: <a data-object-id="THE_ID" class="nexus-mention">Document Title</a>.
+      4. Do not include <html>, <head>, or <body> tags, just the content.
+      5. Be concise and direct.
+
       Context:
       ${contextString}
       
-      User Question: ${query}
-      
-      Answer concisely and cite the titles of the notes used.`;
+      User Question: ${query}`;
 
       // 2. Call Gemini
       const response = await this.ai.models.generateContent({
@@ -56,10 +71,10 @@ export class GeminiService {
         contents: prompt,
       });
 
-      return response.text || "I couldn't generate a response based on the context.";
+      return response.text || (lang === 'es' ? "No pude generar una respuesta basada en el contexto." : "I couldn't generate a response based on the context.");
     } catch (error) {
       console.error("Gemini API Error:", error);
-      return "Error connecting to NexusAI. Please check your API configuration.";
+      return lang === 'es' ? "Error conectando con NexusAI. Por favor verifica tu configuración." : "Error connecting to NexusAI. Please check your API configuration.";
     }
   }
 
