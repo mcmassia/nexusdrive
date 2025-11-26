@@ -17,6 +17,10 @@ import { authService } from './services/authService';
 import { driveService } from './services/driveService';
 import { Search, Plus, LogOut, FileText, User, Briefcase, Calendar, Sparkles, RefreshCw, Menu, X } from 'lucide-react';
 import { TYPE_CONFIG, TRANSLATIONS } from './constants';
+import { NotificationProvider } from './components/NotificationContext';
+import { NotificationUI } from './components/NotificationUI';
+import { GlobalErrorHandler } from './components/GlobalErrorHandler';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   // Auth State
@@ -229,354 +233,360 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      <Sidebar
-        currentView={currentView}
-        onViewChange={setCurrentView}
-        onTypeFilter={setFilterType}
-        onObjectSelect={setSelectedObject}
-        isDarkMode={isDarkMode}
-        toggleTheme={() => setIsDarkMode(!isDarkMode)}
-        lang={lang}
-        setLang={setLang}
-        objects={objects}
-        availableTypes={availableTypes}
-      />
+    <ErrorBoundary>
+      <NotificationProvider>
+        <GlobalErrorHandler />
+        <NotificationUI />
+        <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+          <Sidebar
+            currentView={currentView}
+            onViewChange={setCurrentView}
+            onTypeFilter={setFilterType}
+            onObjectSelect={setSelectedObject}
+            isDarkMode={isDarkMode}
+            toggleTheme={() => setIsDarkMode(!isDarkMode)}
+            lang={lang}
+            setLang={setLang}
+            objects={objects}
+            availableTypes={availableTypes}
+          />
 
-      <div className="flex-1 flex flex-col relative">
-        {/* Top Header - Sticky */}
-        <header className="sticky top-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors z-30">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-            {getHeaderTitle()}
-            {authService.isInDemoMode() && (
-              <span className="text-xs font-medium px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-300 dark:border-amber-700 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                Demo Mode
-              </span>
-            )}
-          </h2>
-          <div className="flex gap-3 items-center">
-            <button
-              onClick={() => {
-                setIsSearchOpen(true);
-                setSelectedObject(null);
-              }}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-              title={t.searchPlaceholder}
-            >
-              <Search size={20} />
-            </button>
+          <div className="flex-1 flex flex-col relative">
+            {/* Top Header - Sticky */}
+            <header className="sticky top-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors z-30">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                {getHeaderTitle()}
+                {authService.isInDemoMode() && (
+                  <span className="text-xs font-medium px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-300 dark:border-amber-700 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    Demo Mode
+                  </span>
+                )}
+              </h2>
+              <div className="flex gap-3 items-center">
+                <button
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    setSelectedObject(null);
+                  }}
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                  title={t.searchPlaceholder}
+                >
+                  <Search size={20} />
+                </button>
 
-            {/* NEW BUTTON & MENU */}
-            {/* Sync Button */}
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className={`p - 2 rounded - full transition - all ${syncing
-                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed'
-                : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
-                } `}
-              title={syncing ? (lang === 'es' ? 'Sincronizando...' : 'Syncing...') : (lang === 'es' ? 'Sincronizar con Drive' : 'Sync with Drive')}
-            >
-              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-            </button>
+                {/* NEW BUTTON & MENU */}
+                {/* Sync Button */}
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className={`p - 2 rounded - full transition - all ${syncing
+                    ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed'
+                    : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
+                    } `}
+                  title={syncing ? (lang === 'es' ? 'Sincronizando...' : 'Syncing...') : (lang === 'es' ? 'Sincronizar con Drive' : 'Sync with Drive')}
+                >
+                  <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                </button>
 
-            {/* Create Button */}
-            <div className="relative">
-              <button
-                onClick={() => setIsNewMenuOpen(!isNewMenuOpen)}
-                className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-md transition-all flex items-center justify-center"
-                title={t.createNew}
-              >
-                <Plus size={20} />
-              </button>
+                {/* Create Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsNewMenuOpen(!isNewMenuOpen)}
+                    className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 shadow-md transition-all flex items-center justify-center"
+                    title={t.createNew}
+                  >
+                    <Plus size={20} />
+                  </button>
 
-              {isNewMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setIsNewMenuOpen(false)}></div>
-                  <div className="absolute right-0 top-12 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
-                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      {t.createNew}
-                    </div>
+                  {isNewMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setIsNewMenuOpen(false)}></div>
+                      <div className="absolute right-0 top-12 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950/50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {t.createNew}
+                        </div>
 
-                    {/* Dynamically render all available types */}
-                    {availableTypes.map(schema => {
-                      const iconName = TYPE_CONFIG[schema.type as NexusType]?.icon;
-                      const Icon = (iconName === 'User' ? User :
-                        iconName === 'Calendar' ? Calendar :
-                          iconName === 'Briefcase' ? Briefcase :
-                            FileText);
+                        {/* Dynamically render all available types */}
+                        {availableTypes.map(schema => {
+                          const iconName = TYPE_CONFIG[schema.type as NexusType]?.icon;
+                          const Icon = (iconName === 'User' ? User :
+                            iconName === 'Calendar' ? Calendar :
+                              iconName === 'Briefcase' ? Briefcase :
+                                FileText);
 
-                      return (
+                          return (
+                            <button
+                              key={schema.type}
+                              onClick={() => {
+                                createNewObject(schema.type as NexusType, '');
+                                setIsNewMenuOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-3"
+                            >
+                              <Icon size={16} style={{ color: TYPE_CONFIG[schema.type as NexusType]?.color || '#6b7280' }} />
+                              <span>{schema.type}</span>
+                            </button>
+                          );
+                        })}
+
+                        <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
                         <button
-                          key={schema.type}
                           onClick={() => {
-                            createNewObject(schema.type as NexusType, '');
+                            setCurrentView('settings');
                             setIsNewMenuOpen(false);
                           }}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-3"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-purple-600 dark:text-purple-400 font-medium flex items-center gap-3"
                         >
-                          <Icon size={16} style={{ color: TYPE_CONFIG[schema.type as NexusType]?.color || '#6b7280' }} />
-                          <span>{schema.type}</span>
+                          <Sparkles size={16} />
+                          <span>{lang === 'es' ? 'Crear Tipo Personalizado...' : 'Create Custom Type...'}</span>
                         </button>
-                      );
-                    })}
+                      </div>
+                    </>
+                  )}
+                </div>
 
-                    <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
-                    <button
-                      onClick={() => {
-                        setCurrentView('settings');
-                        setIsNewMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-purple-600 dark:text-purple-400 font-medium flex items-center gap-3"
-                    >
-                      <Sparkles size={16} />
-                      <span>{lang === 'es' ? 'Crear Tipo Personalizado...' : 'Create Custom Type...'}</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* User Menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                {user.picture ? (
-                  <img src={user.picture} alt="User" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-                    {user?.name?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                )}
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:block">{user?.name || 'User'}</span>
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 top-12 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-50">
-                  <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                {/* User Menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
                     {user.picture ? (
-                      <img src={user.picture} alt="User" className="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700" />
+                      <img src={user.picture} alt="User" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
                         {user?.name?.charAt(0).toUpperCase() || 'U'}
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{user?.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={async () => {
-                      if (confirm(lang === 'es'
-                        ? '¿Limpiar caché local? Esto eliminará todos los datos locales y volverá a sincronizar desde Drive.'
-                        : 'Clear local cache? This will delete all local data and resync from Drive.')) {
-                        setShowUserMenu(false);
-                        setSyncing(true);
-                        try {
-                          await db.clearCache();
-                          await loadData();
-                          alert(lang === 'es' ? 'Caché limpiado exitosamente' : 'Cache cleared successfully');
-                        } catch (error) {
-                          console.error('Failed to clear cache:', error);
-                          alert(lang === 'es' ? 'Error al limpiar caché' : 'Failed to clear cache');
-                        } finally {
-                          setSyncing(false);
-                        }
-                      }
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
-                  >
-                    <RefreshCw size={16} />
-                    {lang === 'es' ? 'Limpiar caché local' : 'Clear local cache'}
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:block">{user?.name || 'User'}</span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      authService.logout();
-                      setShowUserMenu(false);
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
-                  >
-                    <LogOut size={16} />
-                    {t.logout}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div >
-        </header >
-
-        {/* Main Workspace */}
-        <main className="flex-1 overflow-hidden relative p-0 bg-slate-100 dark:bg-black/20 flex">
-
-          <div className="flex-1 relative">
-            {currentView === 'dashboard' && (
-              <Dashboard onNavigate={setSelectedObject} lang={lang} objects={objects} />
-            )}
-
-            {
-              currentView === 'graph' && (
-                <GraphVisualization
-                  nodes={graphData.nodes}
-                  links={graphData.links}
-                  onNodeClick={handleNodeClick}
-                  isDarkMode={isDarkMode}
-                />
-              )
-            }
-
-            {
-              currentView === 'settings' && (
-                <TypeManager />
-              )
-            }
-
-            {
-              currentView === 'tags' && (
-                <TagsManager
-                  lang={lang}
-                  onNavigate={(doc) => {
-                    setSelectedObject(doc);
-                    setTagsSearchQuery(''); // Clear filter after navigation
-                  }}
-                  initialSearchQuery={tagsSearchQuery}
-                />
-              )
-            }
-
-            {
-              currentView === 'calendar' && (
-                <CalendarView
-                  lang={lang}
-                  onNavigate={(obj) => {
-                    setSelectedObject(obj);
-                  }}
-                />
-              )
-            }
-
-            {
-              currentView === 'tasks' && (
-                <TasksView
-                  lang={lang}
-                  onNavigate={(obj) => setSelectedObject(obj)}
-                  availableTypes={availableTypes}
-                />
-              )
-            }
-
-            {
-              currentView === 'documents' && (
-                <DocumentsView
-                  objects={objects}
-                  onSelectObject={(obj) => setSelectedObject(obj)}
-                  onRefresh={loadData}
-                  initialTypeFilter={documentsTypeFilter}
-                  lang={lang}
-                  availableTypes={availableTypes}
-                />
-              )
-            }
-
-            {
-              currentView === 'list' && (
-                /* 95% Width applied here */
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto h-full pb-20 no-scrollbar max-w-[95%] mx-auto w-full">
-                  {filteredObjects.map(obj => (
-                    <div
-                      key={obj.id}
-                      onClick={() => setSelectedObject(obj)}
-                      className="bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all flex flex-col h-40"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
-                          {obj.type}
-                        </span>
-                        <div style={{ color: TYPE_CONFIG[obj.type as NexusType]?.color || '#999' }}>
-                          {(() => {
-                            const iconName = TYPE_CONFIG[obj.type as NexusType]?.icon;
-                            const Icon = (iconName === 'User' ? User :
-                              iconName === 'Calendar' ? Calendar :
-                                iconName === 'Briefcase' ? Briefcase :
-                                  FileText);
-                            return <Icon size={16} />;
-                          })()}
-                        </div>
-                      </div>
-                      <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2 line-clamp-2">{obj.title}</h3>
-                      <div className="mt-auto flex items-center justify-between text-xs text-slate-400">
-                        <span>{new Date(obj.lastModified).toLocaleDateString()}</span>
-                        {obj.tags.length > 0 && (
-                          <div className="flex gap-1">
-                            {obj.tags.slice(0, 2).map((tag, i) => (
-                              <span key={i} className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{tag}</span>
-                            ))}
+                  {showUserMenu && (
+                    <div className="absolute right-0 top-12 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-50">
+                      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                        {user.picture ? (
+                          <img src={user.picture} alt="User" className="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                            {user?.name?.charAt(0).toUpperCase() || 'U'}
                           </div>
                         )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{user?.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                        </div>
                       </div>
+
+                      <button
+                        onClick={async () => {
+                          if (confirm(lang === 'es'
+                            ? '¿Limpiar caché local? Esto eliminará todos los datos locales y volverá a sincronizar desde Drive.'
+                            : 'Clear local cache? This will delete all local data and resync from Drive.')) {
+                            setShowUserMenu(false);
+                            setSyncing(true);
+                            try {
+                              await db.clearCache();
+                              await loadData();
+                              alert(lang === 'es' ? 'Caché limpiado exitosamente' : 'Cache cleared successfully');
+                            } catch (error) {
+                              console.error('Failed to clear cache:', error);
+                              alert(lang === 'es' ? 'Error al limpiar caché' : 'Failed to clear cache');
+                            } finally {
+                              setSyncing(false);
+                            }
+                          }
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        {lang === 'es' ? 'Limpiar caché local' : 'Clear local cache'}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          authService.logout();
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                      >
+                        <LogOut size={16} />
+                        {t.logout}
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
+              </div >
+            </header >
+
+            {/* Main Workspace */}
+            <main className="flex-1 overflow-hidden relative p-0 bg-slate-100 dark:bg-black/20 flex">
+
+              <div className="flex-1 relative">
+                {currentView === 'dashboard' && (
+                  <Dashboard onNavigate={setSelectedObject} lang={lang} objects={objects} />
+                )}
+
+                {
+                  currentView === 'graph' && (
+                    <GraphVisualization
+                      nodes={graphData.nodes}
+                      links={graphData.links}
+                      onNodeClick={handleNodeClick}
+                      isDarkMode={isDarkMode}
+                    />
+                  )
+                }
+
+                {
+                  currentView === 'settings' && (
+                    <TypeManager />
+                  )
+                }
+
+                {
+                  currentView === 'tags' && (
+                    <TagsManager
+                      lang={lang}
+                      onNavigate={(doc) => {
+                        setSelectedObject(doc);
+                        setTagsSearchQuery(''); // Clear filter after navigation
+                      }}
+                      initialSearchQuery={tagsSearchQuery}
+                    />
+                  )
+                }
+
+                {
+                  currentView === 'calendar' && (
+                    <CalendarView
+                      lang={lang}
+                      onNavigate={(obj) => {
+                        setSelectedObject(obj);
+                      }}
+                    />
+                  )
+                }
+
+                {
+                  currentView === 'tasks' && (
+                    <TasksView
+                      lang={lang}
+                      onNavigate={(obj) => setSelectedObject(obj)}
+                      availableTypes={availableTypes}
+                    />
+                  )
+                }
+
+                {
+                  currentView === 'documents' && (
+                    <DocumentsView
+                      objects={objects}
+                      onSelectObject={(obj) => setSelectedObject(obj)}
+                      onRefresh={loadData}
+                      initialTypeFilter={documentsTypeFilter}
+                      lang={lang}
+                      availableTypes={availableTypes}
+                    />
+                  )
+                }
+
+                {
+                  currentView === 'list' && (
+                    /* 95% Width applied here */
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto h-full pb-20 no-scrollbar max-w-[95%] mx-auto w-full">
+                      {filteredObjects.map(obj => (
+                        <div
+                          key={obj.id}
+                          onClick={() => setSelectedObject(obj)}
+                          className="bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all flex flex-col h-40"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
+                              {obj.type}
+                            </span>
+                            <div style={{ color: TYPE_CONFIG[obj.type as NexusType]?.color || '#999' }}>
+                              {(() => {
+                                const iconName = TYPE_CONFIG[obj.type as NexusType]?.icon;
+                                const Icon = (iconName === 'User' ? User :
+                                  iconName === 'Calendar' ? Calendar :
+                                    iconName === 'Briefcase' ? Briefcase :
+                                      FileText);
+                                return <Icon size={16} />;
+                              })()}
+                            </div>
+                          </div>
+                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2 line-clamp-2">{obj.title}</h3>
+                          <div className="mt-auto flex items-center justify-between text-xs text-slate-400">
+                            <span>{new Date(obj.lastModified).toLocaleDateString()}</span>
+                            {obj.tags.length > 0 && (
+                              <div className="flex gap-1">
+                                {obj.tags.slice(0, 2).map((tag, i) => (
+                                  <span key={i} className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+
+                {selectedObject && (
+                  <div className="absolute inset-0 z-20 bg-white dark:bg-slate-900">
+                    <Editor
+                      object={selectedObject}
+                      onSave={async (obj) => {
+                        await db.saveObject(obj);
+                        loadData();
+                      }}
+                      onClose={() => setSelectedObject(null)}
+                      lang={lang}
+                      onNavigateToDocuments={(filterType) => {
+                        // Navigate to Documents view with type filter
+                        setCurrentView('documents');
+                        setDocumentsTypeFilter(filterType || null);
+                        setSelectedObject(null);
+                      }}
+                      onTagClick={handleTagClick}
+                      onDelete={async (id) => {
+                        await db.deleteObject(id);
+                        setSelectedObject(null);
+                        loadData();
+                      }}
+                      onNavigate={(obj) => setSelectedObject(obj)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Panel - Always Visible */}
+              <RightPanel
+                objects={objects}
+                lang={lang}
+                onNavigate={setSelectedObject}
+              />
+            </main>
+
+            {
+              isSearchOpen && (
+                <AISearchModal
+                  onClose={() => setIsSearchOpen(false)}
+                  onNavigate={(obj) => {
+                    setSelectedObject(obj);
+                    setIsSearchOpen(false);
+                  }}
+                  lang={lang}
+                />
               )
             }
-
-            {selectedObject && (
-              <div className="absolute inset-0 z-20 bg-white dark:bg-slate-900">
-                <Editor
-                  object={selectedObject}
-                  onSave={async (obj) => {
-                    await db.saveObject(obj);
-                    loadData();
-                  }}
-                  onClose={() => setSelectedObject(null)}
-                  lang={lang}
-                  onNavigateToDocuments={(filterType) => {
-                    // Navigate to Documents view with type filter
-                    setCurrentView('documents');
-                    setDocumentsTypeFilter(filterType || null);
-                    setSelectedObject(null);
-                  }}
-                  onTagClick={handleTagClick}
-                  onDelete={async (id) => {
-                    await db.deleteObject(id);
-                    setSelectedObject(null);
-                    loadData();
-                  }}
-                  onNavigate={(obj) => setSelectedObject(obj)}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Right Panel - Always Visible */}
-          <RightPanel
-            objects={objects}
-            lang={lang}
-            onNavigate={setSelectedObject}
-          />
-        </main>
-
-        {
-          isSearchOpen && (
-            <AISearchModal
-              onClose={() => setIsSearchOpen(false)}
-              onNavigate={(obj) => {
-                setSelectedObject(obj);
-                setIsSearchOpen(false);
-              }}
-              lang={lang}
-            />
-          )
-        }
-      </div >
-    </div >
+          </div >
+        </div >
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 };
 

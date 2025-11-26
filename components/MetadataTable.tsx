@@ -394,7 +394,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
               })}
             </td>
           </tr>
-          {object.metadata.map((prop, idx) => (
+          {object.metadata?.map((prop, idx) => (
             <tr key={prop.key} className="border-b border-slate-200/50 dark:border-slate-700/50 last:border-0">
               <td className="px-4 py-2 font-medium text-slate-500 dark:text-slate-400">
                 {prop.label}
