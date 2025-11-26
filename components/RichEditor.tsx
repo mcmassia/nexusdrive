@@ -429,6 +429,8 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       if (!editorRef.current) return;
 
       const schemas = await db.getAllTypeSchemas();
+      if (!editorRef.current) return; // Check again after async call
+
       const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
 
       const mentions = editorRef.current.querySelectorAll('.nexus-mention');

@@ -49,7 +49,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
             filtered = filtered.filter(obj =>
                 obj.title.toLowerCase().includes(query) ||
                 obj.content.toLowerCase().includes(query) ||
-                obj.tags.some(tag => tag.toLowerCase().includes(query))
+                obj.tags?.some(tag => tag.toLowerCase().includes(query))
             );
         }
 

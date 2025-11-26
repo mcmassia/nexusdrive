@@ -34,7 +34,7 @@ export class GeminiService {
         : `Based on your notes, here is what I found regarding "${query}":`;
 
       const list = context.map(c =>
-        `<li><strong><a data-object-id="${c.id}" class="nexus-mention">${c.title}</a></strong>: ${c.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}...</li>`
+        `<li><strong><a data-object-id="${c.id}" data-object-type="${c.type}" class="nexus-mention">${c.title}</a></strong>: ${c.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}...</li>`
       ).join('');
 
       return `<p>${intro}</p><ul>${list}</ul><p>${lang === 'es' ? 'Esta información fue sintetizada de' : 'This information was synthesized from'} ${context.length} ${lang === 'es' ? 'objetos relevantes' : 'relevant objects'}.</p>`;
@@ -53,25 +53,52 @@ export class GeminiService {
       
       ${languageInstruction}
       
-      IMPORTANT FORMATTING RULES:
-      1. Return the answer in clean, readable HTML5 format (do NOT use Markdown).
-      2. Use <h3>, <p>, <ul>, <li> tags for structure.
-      3. When citing a document from the context, YOU MUST use this exact HTML format: <a data-object-id="THE_ID" class="nexus-mention">Document Title</a>.
-      4. Do not include <html>, <head>, or <body> tags, just the content.
-      5. Be concise and direct.
+      IMPORTANT: Return the response in strict JSON format with the following structure:
+      {
+        "answerHtml": "The answer in HTML format (use <p>, <ul>, <li>, <h3>). Do NOT create links/anchors in this HTML, just use plain text for names.",
+        "mentions": [
+          { "id": "ID_FROM_CONTEXT", "name": "EXACT_NAME_IN_TEXT", "type": "TYPE_FROM_CONTEXT" }
+        ]
+      }
+
+      Rules:
+      1. In "answerHtml", write the answer naturally.
+      2. In "mentions", list every document/person/meeting you referred to in the answer.
+      3. The "name" in mentions must match the text in "answerHtml" EXACTLY so I can replace it with a link later.
+      4. Do not include <html> or <body> tags.
 
       Context:
       ${contextString}
       
       User Question: ${query}`;
 
-      // 2. Call Gemini
+      // 2. Call Gemini with JSON instruction
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
 
-      return response.text || (lang === 'es' ? "No pude generar una respuesta basada en el contexto." : "I couldn't generate a response based on the context.");
+      const text = response.text;
+      if (!text) throw new Error('Empty response from AI');
+
+      const data = JSON.parse(text);
+      let finalHtml = data.answerHtml;
+
+      // 3. Post-process: Inject links
+      // Sort mentions by name length (descending) to avoid partial replacements
+      const sortedMentions = (data.mentions || []).sort((a: any, b: any) => b.name.length - a.name.length);
+
+      for (const mention of sortedMentions) {
+        // Create a regex that matches the name but not inside existing tags
+        // This is a simple replacement; for production, a DOM parser is safer but this suffices for now
+        const link = `<a data-object-id="${mention.id}" data-object-type="${mention.type}" class="nexus-mention">${mention.name}</a>`;
+        finalHtml = finalHtml.replace(new RegExp(mention.name, 'g'), link);
+      }
+
+      return finalHtml;
     } catch (error) {
       console.error("Gemini API Error:", error);
       return lang === 'es' ? "Error conectando con NexusAI. Por favor verifica tu configuración." : "Error connecting to NexusAI. Please check your API configuration.";

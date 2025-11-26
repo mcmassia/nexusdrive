@@ -34,7 +34,7 @@ interface NexusDB extends DBSchema {
   };
   calendar_preferences: {
     key: string;
-    value: { id: string; selectedCalendars: string[] };
+    value: { id: string; calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] };
   };
 }
 
@@ -406,7 +406,7 @@ class LocalDatabase {
       }
 
       // Extract links from metadata properties (document and documents types)
-      for (const prop of obj.metadata) {
+      for (const prop of (obj.metadata || [])) {
         if (prop.type === 'document' && typeof prop.value === 'string' && prop.value) {
           // Single document reference
           if (nodeIds.has(prop.value)) {
@@ -666,7 +666,7 @@ class LocalDatabase {
       // Check title, content, and tags
       return title.includes(normalizedQuery) ||
         content.includes(normalizedQuery) ||
-        obj.tags.some(t => normalize(t).includes(normalizedQuery));
+        obj.tags?.some(t => normalize(t).includes(normalizedQuery));
     });
   }
 
@@ -741,7 +741,7 @@ class LocalDatabase {
     const dates = new Set<string>();
 
     objects.forEach(obj => {
-      obj.metadata.forEach(meta => {
+      obj.metadata?.forEach(meta => {
         if (meta.type === 'date' && meta.value) {
           const normalized = this.normalizeDate(meta.value as string);
           if (normalized) {
@@ -756,7 +756,7 @@ class LocalDatabase {
   async getObjectsByDate(dateStr: string): Promise<NexusObject[]> {
     const objects = await this.getObjects();
     return objects.filter(obj => {
-      return obj.metadata.some(m => {
+      return obj.metadata?.some(m => {
         if (m.type === 'date' && m.value) {
           const normalized = this.normalizeDate(m.value as string);
           return normalized === dateStr;
@@ -770,7 +770,7 @@ class LocalDatabase {
     const objects = await this.getObjects();
     const tags = new Set<string>();
     objects.forEach(obj => {
-      obj.tags.forEach(t => tags.add(t));
+      obj.tags?.forEach(t => tags.add(t));
     });
     return Array.from(tags);
   }

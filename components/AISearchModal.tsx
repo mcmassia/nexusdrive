@@ -32,16 +32,71 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     setIsLoading(false);
   };
 
+  // Effect to colorize mentions after response is rendered
+  React.useEffect(() => {
+    if (!response) return;
+
+    const colorize = async () => {
+      const container = document.getElementById('ai-response-content');
+      if (!container) return;
+
+      const schemas = await db.getAllTypeSchemas();
+      const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
+
+      const mentions = container.querySelectorAll('.nexus-mention');
+      mentions.forEach(mention => {
+        const el = mention as HTMLElement;
+        // Try to get type from data attribute first
+        let type = el.dataset.objectType;
+
+        // If not present (legacy or AI missed it), try to find object in results
+        if (!type && el.dataset.objectId) {
+          const obj = results.find(r => r.id === el.dataset.objectId);
+          if (obj) type = obj.type;
+        }
+
+        if (type && schemaMap.has(type)) {
+          el.style.color = schemaMap.get(type) || '#3b82f6';
+        } else {
+          // Fallback default color
+          el.style.color = '#3b82f6';
+        }
+      });
+    };
+
+    // Small timeout to ensure DOM is ready
+    setTimeout(colorize, 100);
+  }, [response, results]);
+
   // Handle clicks on internal links in the AI response
-  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleContentClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    const link = target.tagName === 'A' ? target as HTMLAnchorElement : target.closest('a');
+    const link = target.closest('a');
 
     if (link && link.dataset.objectId) {
       e.preventDefault();
-      const obj = results.find(r => r.id === link.dataset.objectId) || { id: link.dataset.objectId } as NexusObject;
-      onNavigate(obj);
-      onClose();
+      const objectId = link.dataset.objectId;
+
+      // 1. Try to find in current search results
+      let obj = results.find(r => r.id === objectId);
+
+      // 2. If not found, try to fetch from DB
+      if (!obj) {
+        try {
+          obj = await db.getObjectById(objectId) || undefined;
+        } catch (err) {
+          console.error("Error fetching object:", err);
+        }
+      }
+
+      if (obj) {
+        onNavigate(obj);
+        onClose();
+      } else {
+        console.warn(`Object with ID ${objectId} not found.`);
+        // Optional: Show a toast or alert
+        // alert(lang === 'es' ? 'Documento no encontrado' : 'Document not found');
+      }
     }
   };
 
@@ -104,8 +159,9 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                   NexusAI Answer
                 </h3>
                 <div
+                  id="ai-response-content"
                   className="prose prose-lg dark:prose-invert max-w-none 
-                    [&_a]:text-blue-600 [&_a]:dark:text-blue-400 [&_a]:no-underline [&_a]:hover:underline [&_a]:cursor-pointer [&_a]:font-medium
+                    [&_a]:no-underline [&_a]:hover:underline [&_a]:cursor-pointer [&_a]:font-medium
                     [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-2
                     [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2
                   "

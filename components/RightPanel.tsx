@@ -39,7 +39,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
         const dateStr = selectedDate;
         const matches = objects.filter(obj => {
             // Check metadata dates ONLY
-            return obj.metadata.some(m => {
+            return obj.metadata?.some(m => {
                 if (m.type === 'date' && m.value) {
                     // Normalize date
                     let normalized = m.value as string;

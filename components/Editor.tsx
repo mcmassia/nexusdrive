@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Cloc
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
+import { useNotification } from './NotificationContext';
 
 interface EditorProps {
     object: NexusObject;
@@ -49,7 +50,8 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
         const tags = Array.from(tempDiv.querySelectorAll('.nexus-tag')).map(el => el.textContent?.replace('#', '') || '');
-        const uniqueTags = Array.from(new Set([...currentObject.tags, ...tags.filter(t => t)]));
+        const currentTags = currentObject.tags || [];
+        const uniqueTags = Array.from(new Set([...currentTags, ...tags.filter(t => t)]));
 
         // Extract Tasks
         const tasks: any[] = [];
@@ -130,10 +132,17 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         }
     };
 
+    const { confirm } = useNotification();
+
     const handleDelete = async () => {
-        if (!confirm(lang === 'es' ? '¿Estás seguro de que quieres eliminar este documento?' : 'Are you sure you want to delete this document?')) {
-            return;
-        }
+        const confirmed = await confirm({
+            message: lang === 'es' ? '¿Eliminar documento?' : 'Delete document?',
+            description: lang === 'es'
+                ? '¿Estás seguro de que quieres eliminar este documento? Esta acción no se puede deshacer.'
+                : 'Are you sure you want to delete this document? This action cannot be undone.'
+        });
+
+        if (!confirmed) return;
 
         setIsSaving(true);
         try {
@@ -164,7 +173,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                     </button>
                     <span className="text-sm text-slate-400 shrink-0">/</span>
                     <input
-                        value={currentObject.title}
+                        value={currentObject.title || ''}
                         onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
                         className="flex-1 min-w-0 font-semibold text-slate-800 dark:!text-white outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
                     />
