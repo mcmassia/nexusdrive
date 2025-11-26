@@ -29,12 +29,16 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
     const [typeSchema, setTypeSchema] = useState<TypeSchema | undefined>(undefined);
     const [objects, setObjects] = useState<NexusObject[]>([]);
 
+    const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);
+    const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
+
     useEffect(() => {
         setCurrentObject(object);
         setContent(object.content);
 
         // Load type schema for this object type
         db.getAllTypeSchemas().then(schemas => {
+            setAvailableSchemas(schemas);
             const schema = schemas.find(s => s.type === object.type);
             setTypeSchema(schema);
         });
@@ -42,6 +46,44 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         // Load all objects for navigation
         db.getObjects().then(setObjects);
     }, [object]);
+
+    const handleTypeChange = async (newType: NexusType) => {
+        if (newType === currentObject.type) {
+            setIsTypeMenuOpen(false);
+            return;
+        }
+
+        const newSchema = availableSchemas.find(s => s.type === newType);
+        if (!newSchema) return;
+
+        // Migrate metadata
+        const newMetadata = newSchema.properties.map(field => {
+            // Try to find existing value with same key
+            const existing = currentObject.metadata?.find(m => m.key === field.key);
+            if (existing) {
+                return { ...existing, type: field.type }; // Keep value, update type definition if needed
+            }
+            // Otherwise use default
+            return {
+                key: field.key,
+                value: field.defaultValue,
+                type: field.type
+            };
+        });
+
+        const updated = {
+            ...currentObject,
+            type: newType,
+            metadata: newMetadata,
+            lastModified: new Date()
+        };
+
+        await db.saveObject(updated);
+        onSave(updated);
+        setCurrentObject(updated);
+        setTypeSchema(newSchema);
+        setIsTypeMenuOpen(false);
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -165,12 +207,33 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
             <div className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className="text-sm text-slate-400 shrink-0">/ Nexus /</span>
-                    <button
-                        onClick={() => onNavigateToDocuments?.(currentObject.type)}
-                        className="text-sm text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0"
-                    >
-                        {currentObject.type}s
-                    </button>
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsTypeMenuOpen(!isTypeMenuOpen)}
+                            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                        >
+                            {currentObject.type}
+                            <span className="text-slate-400 text-xs">▼</span>
+                        </button>
+
+                        {isTypeMenuOpen && (
+                            <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                {availableSchemas.map(schema => (
+                                    <button
+                                        key={schema.type}
+                                        onClick={() => handleTypeChange(schema.type)}
+                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2
+                                            ${currentObject.type === schema.type ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-700 dark:text-slate-200'}
+                                        `}
+                                    >
+                                        <span className="text-lg">{schema.icon}</span>
+                                        {schema.type}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <span className="text-sm text-slate-400 shrink-0">/</span>
                     <input
                         value={currentObject.title || ''}
