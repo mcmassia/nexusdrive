@@ -8,6 +8,7 @@ import TypeManager from './components/TypeManager';
 import TagsManager from './components/TagsManager';
 import AISearchModal from './components/AISearchModal';
 import CalendarView from './components/CalendarView';
+import TasksView from './components/TasksView';
 import LoginScreen from './components/LoginScreen';
 import RightPanel from './components/RightPanel';
 import { NexusObject, NexusType, GraphNode, GraphLink, UserProfile, TypeSchema, NexusProperty } from './types';
@@ -22,7 +23,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(authService.getUser());
 
   // App State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'documents' | 'list' | 'graph' | 'settings' | 'tags'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags' | 'tasks'>('dashboard');
   const [filterType, setFilterType] = useState<NexusType | null>(null);
   const [selectedObject, setSelectedObject] = useState<NexusObject | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -221,6 +222,7 @@ const App: React.FC = () => {
   const getHeaderTitle = () => {
     if (currentView === 'dashboard') return `${t.welcome}, ${user.name.split(' ')[0]} `;
     if (currentView === 'graph') return t.knowledgeGraph;
+    if (currentView === 'tasks') return lang === 'es' ? 'Tareas' : 'Tasks';
     if (currentView === 'calendar') return t.calendar;
     if (filterType) return filterType === NexusType.PAGE ? t.pages : filterType === NexusType.PERSON ? t.people : filterType === NexusType.MEETING ? t.meetings : t.projects;
     return 'All Objects';
@@ -456,6 +458,15 @@ const App: React.FC = () => {
                   onNavigate={(obj) => {
                     setSelectedObject(obj);
                   }}
+                />
+              )
+            }
+
+            {
+              currentView === 'tasks' && (
+                <TasksView
+                  lang={lang}
+                  onNavigate={(obj) => setSelectedObject(obj)}
                 />
               )
             }

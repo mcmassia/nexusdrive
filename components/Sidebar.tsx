@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid, FileText, Users, Calendar, Briefcase, Settings, Database, Cloud, Moon, Sun, Home, ChevronLeft, ChevronRight, Globe, Network, Tag } from 'lucide-react';
+import {
+  Search, Plus, FileText, Settings, ChevronLeft, ChevronRight,
+  LayoutGrid, Users, Calendar, Briefcase, Hash, Globe, CheckSquare, Database, Cloud, Moon, Sun, Home, Network, Tag
+} from 'lucide-react';
 import { NexusType, NexusObject } from '../types';
 import { db } from '../services/db';
 import { TYPE_CONFIG, TRANSLATIONS } from '../constants';
 
 interface SidebarProps {
-  currentView: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags';
   onViewChange: (view: 'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags') => void;
   onTypeFilter: (type: NexusType | null) => void;
   onObjectSelect: (obj: NexusObject) => void;
@@ -58,7 +60,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           <LayoutGrid size={18} className="shrink-0" /> {!isCollapsed && <span>{t.graph}</span>}
         </button>
 
-        {/* 3. DOCUMENTS View Link */}
+        {/* 3. TASKS */}
+        <button onClick={() => { onViewChange('tasks'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('tasks')} title={lang === 'es' ? 'Tareas' : 'Tasks'}>
+          <CheckSquare size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Tareas' : 'Tasks'}</span>}
+        </button>
+
+        {/* 4. DOCUMENTS */}
         <button onClick={() => { onViewChange('documents'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('documents')} title={lang === 'es' ? 'Documentos' : 'Documents'}>
           <FileText size={18} className="shrink-0" />
           {!isCollapsed && (
@@ -69,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           )}
         </button>
 
-        {/* 4. CALENDAR View Link */}
+        {/* 5. CALENDAR */}
         <button onClick={() => { onViewChange('calendar'); onTypeFilter(null); onObjectSelect(null); }} className={navItemClass('calendar')} title={t.calendar}>
           <Calendar size={18} className="shrink-0" /> {!isCollapsed && <span>{t.calendar}</span>}
         </button>
@@ -104,26 +111,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
             </button>
           );
         })}
-        {/* 4. GRAPH */}
-        <button onClick={() => { onViewChange('graph'); onObjectSelect(null); }} className={navItemClass('graph')} title={t.graph}>
-          <Network size={20} />
-          {!isCollapsed && <span>{t.graph}</span>}
-        </button>
 
         {/* Divider */}
         <div className="my-2 border-t border-slate-200 dark:border-slate-700" />
 
-        {/* 5. TAGS */}
+        {/* TAGS */}
         <button onClick={() => { onViewChange('tags'); onObjectSelect(null); }} className={navItemClass('tags')} title={lang === 'es' ? 'Etiquetas' : 'Tags'}>
           <Tag size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Etiquetas' : 'Tags'}</span>}
         </button>
-        {/* 6. SETTINGS */}
+        {/* SETTINGS */}
         <button onClick={() => { onViewChange('settings'); onObjectSelect(null); }} className={navItemClass('settings')} title={lang === 'es' ? 'Configuración' : 'Settings'}>
           <Settings size={18} className="shrink-0" /> {!isCollapsed && <span>{lang === 'es' ? 'Configuración' : 'Settings'}</span>}
         </button>
       </nav>
 
-      {/* FOOTER: Settings + Theme + Language */}
+      {/* FOOTER: Theme + Language */}
       <div className="mt-auto border-t border-slate-200 dark:border-slate-700 p-3 space-y-2">
         {!isCollapsed && (
           <div className="flex items-center justify-between px-2 mb-2">
@@ -151,14 +153,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
         >
           <Globe size={16} className="shrink-0" />
           {!isCollapsed && (lang === 'en' ? 'Español' : 'English')}
-        </button>
-        {/* Settings Button */}
-        <button
-          onClick={() => onViewChange('settings')}
-          className="flex items-center gap-2 px-2 py-2 w-full text-left rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm"
-        >
-          <Settings size={16} className="shrink-0 text-slate-600 dark:text-slate-400" />
-          {!isCollapsed && <span className="text-slate-700 dark:text-slate-300">{lang === 'es' ? 'Configuración' : 'Settings'}</span>}
         </button>
       </div>
 

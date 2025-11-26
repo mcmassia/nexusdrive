@@ -61,15 +61,24 @@ export interface TypeSchema {
   color?: string;
 }
 
+export interface NexusTask {
+  id: string;
+  content: string;
+  completed: boolean;
+  createdAt: Date;
+  documentId: string;
+}
+
 export interface NexusObject {
   id: string;
   title: string;
   type: NexusType;
   content: string; // HTML content
-  metadata: NexusProperty[];
   lastModified: Date;
   tags: string[];
+  metadata: NexusProperty[];
   driveFileId?: string; // Google Drive file ID for linking
+  extractedTasks?: NexusTask[];
 }
 
 export interface GraphNode extends SimulationNodeDatum {

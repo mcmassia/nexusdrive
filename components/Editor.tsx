@@ -51,7 +51,47 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         const tags = Array.from(tempDiv.querySelectorAll('.nexus-tag')).map(el => el.textContent?.replace('#', '') || '');
         const uniqueTags = Array.from(new Set([...currentObject.tags, ...tags.filter(t => t)]));
 
-        const updated = { ...currentObject, content, lastModified: new Date(), tags: uniqueTags };
+        // Extract Tasks
+        const tasks: any[] = [];
+        const taskElements = tempDiv.querySelectorAll('.nexus-task');
+        taskElements.forEach((el) => {
+            const checkbox = el as HTMLInputElement;
+            // Get text following the checkbox
+            let taskContent = '';
+            let nextNode = checkbox.nextSibling;
+
+            // Collect text until next block element or another checkbox
+            while (nextNode) {
+                if (nextNode.nodeType === Node.TEXT_NODE) {
+                    taskContent += nextNode.textContent;
+                } else if (nextNode.nodeType === Node.ELEMENT_NODE) {
+                    const element = nextNode as HTMLElement;
+                    if (['DIV', 'P', 'H1', 'H2', 'H3', 'LI', 'UL', 'OL', 'BLOCKQUOTE'].includes(element.tagName)) {
+                        break;
+                    }
+                    taskContent += element.textContent;
+                }
+                nextNode = nextNode.nextSibling;
+            }
+
+            if (taskContent.trim()) {
+                tasks.push({
+                    id: Math.random().toString(36).substr(2, 9), // Simple ID generation
+                    content: taskContent.trim(),
+                    completed: checkbox.hasAttribute('checked'), // Check attribute, not property, as we set it manually
+                    createdAt: new Date(),
+                    documentId: currentObject.id
+                });
+            }
+        });
+
+        const updated = {
+            ...currentObject,
+            content,
+            lastModified: new Date(),
+            tags: uniqueTags,
+            extractedTasks: tasks
+        };
         await db.saveObject(updated);
         onSave(updated);
         setCurrentObject(updated);
@@ -143,31 +183,33 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Main Content - 95% Width */}
-                <div className="flex-1 overflow-y-auto p-8 max-w-[95%] mx-auto w-full no-scrollbar">
+                <div className="flex-1 overflow-y-auto max-w-[95%] mx-auto w-full no-scrollbar">
 
-                    <MetadataTable
-                        object={currentObject}
-                        onChange={(meta) => setCurrentObject({ ...currentObject, metadata: meta })}
-                        onTagRemove={(tag) => {
-                            const newTags = currentObject.tags.filter(t => t !== tag);
-                            setCurrentObject({ ...currentObject, tags: newTags });
-                        }}
-                        onTagClick={onTagClick}
-                        allObjects={objects}
-                        typeSchema={typeSchema}
-                        onDocumentClick={async (docId) => {
-                            const obj = await db.getObjectById(docId);
-                            if (obj) {
-                                await handleSave();
-                                if (onNavigate) {
-                                    onNavigate(obj);
-                                } else {
-                                    onSave(obj);
+                    <div className="p-8 pb-0">
+                        <MetadataTable
+                            object={currentObject}
+                            onChange={(meta) => setCurrentObject({ ...currentObject, metadata: meta })}
+                            onTagRemove={(tag) => {
+                                const newTags = currentObject.tags.filter(t => t !== tag);
+                                setCurrentObject({ ...currentObject, tags: newTags });
+                            }}
+                            onTagClick={onTagClick}
+                            allObjects={objects}
+                            typeSchema={typeSchema}
+                            onDocumentClick={async (docId) => {
+                                const obj = await db.getObjectById(docId);
+                                if (obj) {
+                                    await handleSave();
+                                    if (onNavigate) {
+                                        onNavigate(obj);
+                                    } else {
+                                        onSave(obj);
+                                    }
                                 }
-                            }
-                        }}
-                        lang={lang}
-                    />
+                            }}
+                            lang={lang}
+                        />
+                    </div>
 
                     {/* Rich Editor */}
                     <div className="min-h-[500px]">
@@ -190,7 +232,8 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                                     [&_blockquote]:!text-slate-700 [&_blockquote]:!border-l-4 [&_blockquote]:!border-slate-300 [&_blockquote]:!pl-4 [&_blockquote]:!italic
                                     [&_code]:!bg-slate-100 [&_code]:!text-pink-600 [&_code]:!px-1 [&_code]:!rounded
                                     [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
-                                    [&_a]:!text-blue-600 [&_a]:!underline
+                                    [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
+                                    [&_a]:underline
                                 "
                             onTagClick={onTagClick}
                             onMentionClick={async (objectId) => {

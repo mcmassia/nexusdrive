@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo } from 'lucide-react';
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo, Image as ImageIcon, Trash2, Maximize2, Minimize2 } from 'lucide-react';
 import { db } from '../services/db';
 import { NexusObject, NexusType, TagConfig } from '../types';
 
@@ -27,6 +27,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const [mentionResults, setMentionResults] = useState<NexusObject[]>([]);
   const [tagResults, setTagResults] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [imageMenuPos, setImageMenuPos] = useState({ top: 0, left: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUserEditing, setIsUserEditing] = useState(false);
   const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
@@ -301,7 +302,8 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     // Get color from type schema
     let color = '#3b82f6'; // default blue
     try {
-      const schema = await db.getTypeSchema(obj.type);
+      const schemas = await db.getAllTypeSchemas();
+      const schema = schemas.find(s => s.type === obj.type);
       if (schema?.color) {
         color = schema.color;
       }
@@ -421,11 +423,35 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     }
   };
 
-  const handleInput = () => {
-    setIsUserEditing(true);
+  // Colorize mentions on mount and content change
+  useEffect(() => {
+    const colorizeMentions = async () => {
+      if (!editorRef.current) return;
+
+      const schemas = await db.getAllTypeSchemas();
+      const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
+
+      const mentions = editorRef.current.querySelectorAll('.nexus-mention');
+      mentions.forEach(mention => {
+        const type = (mention as HTMLElement).dataset.objectType;
+        if (type && schemaMap.has(type)) {
+          (mention as HTMLElement).style.color = schemaMap.get(type) || '#3b82f6';
+        }
+      });
+    };
+
+    colorizeMentions();
+  }, [initialContent, isUserEditing]); // Re-run when content changes
+
+  const triggerChange = () => {
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
+  };
+
+  const handleInput = () => {
+    setIsUserEditing(true);
+    triggerChange(); // Capture normal typing
 
     // Reset user editing flag after a delay
     setTimeout(() => {
@@ -434,7 +460,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
     // Check for @ or # triggers
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    if (!selection || !selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
     const textNode = range.startContainer;
@@ -443,18 +469,24 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       const text = textNode.textContent;
       const cursorPos = range.startOffset;
 
-      // Markdown Input Handling
-      // Check if we just typed a space
-      if (text.endsWith(' ') && cursorPos === text.length) {
-        const lineText = text.trimEnd(); // Text without the trailing space
+      // Debugging
+      // console.log('handleInput:', { text, cursorPos, charCode: text.charCodeAt(cursorPos - 1) });
+
+      // Check if we just typed a space (normal space 32 or nbsp 160)
+      const isSpace = /\s|\u00A0/.test(text.charAt(cursorPos - 1));
+
+      if (isSpace && cursorPos > 0) {
+        const lineText = text.substring(0, cursorPos - 1); // Text before the space
+        // console.log('LineText:', lineText);
 
         // Headers
         if (lineText === '#') {
           execCommand('formatBlock', '<h1>');
-          // Remove the markdown characters
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          setMenuOpen(false);
+          triggerChange(); // Save change
           return;
         }
         if (lineText === '##') {
@@ -462,6 +494,8 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          setMenuOpen(false);
+          triggerChange();
           return;
         }
         if (lineText === '###') {
@@ -469,22 +503,28 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          setMenuOpen(false);
+          triggerChange();
           return;
         }
 
-        // Lists
-        if (lineText === '-' || lineText === '*') {
+        // Unordered List
+        if (lineText === '*' || lineText === '-') {
           execCommand('insertUnorderedList');
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          triggerChange();
           return;
         }
+
+        // Ordered List
         if (lineText === '1.') {
           execCommand('insertOrderedList');
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          triggerChange();
           return;
         }
 
@@ -494,6 +534,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          triggerChange();
           return;
         }
 
@@ -503,6 +544,123 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           const newRange = document.createRange();
           newRange.selectNodeContents(textNode);
           newRange.deleteContents();
+          setMenuOpen(false);
+          triggerChange();
+          return;
+        }
+
+        // Task List: TD (case insensitive)
+        if (lineText.toLowerCase() === 'td') {
+          console.log('Detected Task Trigger (TD)');
+          // Insert checkbox
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'nexus-task mr-2 cursor-pointer';
+
+          // Delete the TD text and the space
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 3); // TD + space
+          rangeToDelete.setEnd(textNode, cursorPos);
+          rangeToDelete.deleteContents();
+
+          range.insertNode(checkbox);
+
+          // Move cursor after
+          range.setStartAfter(checkbox);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          triggerChange(); // Save change
+          return;
+        }
+
+        // Visual Checkbox: []
+        if (lineText === '[]') {
+          console.log('Detected Checkbox Trigger');
+          // Insert checkbox
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'nexus-checkbox mr-2 cursor-pointer';
+
+          // Delete the [] text and the space
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 3); // [] + space
+          rangeToDelete.setEnd(textNode, cursorPos);
+          rangeToDelete.deleteContents();
+
+          range.insertNode(checkbox);
+
+          // Move cursor after
+          range.setStartAfter(checkbox);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          triggerChange();
+          return;
+        }
+
+        // Inline Markdown: Bold (**text**)
+        const boldMatch = lineText.match(/\*\*(.*?)\*\*$/);
+        if (boldMatch) {
+          const matchText = boldMatch[1];
+          const matchLength = boldMatch[0].length;
+
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 1 - matchLength);
+          rangeToDelete.setEnd(textNode, cursorPos - 1);
+          rangeToDelete.deleteContents();
+
+          const boldSpan = document.createElement('b');
+          boldSpan.textContent = matchText;
+
+          const insertRange = document.createRange();
+          insertRange.setStart(textNode, cursorPos - 1 - matchLength);
+          insertRange.collapse(true);
+          insertRange.insertNode(boldSpan);
+
+          const newRange = document.createRange();
+          newRange.setStartAfter(boldSpan);
+          newRange.collapse(true);
+
+          if (boldSpan.nextSibling) {
+            newRange.setStart(boldSpan.nextSibling, 1);
+            newRange.collapse(true);
+          }
+
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          triggerChange(); // Save change
+          return;
+        }
+
+        // Inline Markdown: Italic (*text*)
+        const italicMatch = lineText.match(/\*(.*?)\*$/);
+        if (italicMatch) {
+          const matchText = italicMatch[1];
+          const matchLength = italicMatch[0].length;
+
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 1 - matchLength);
+          rangeToDelete.setEnd(textNode, cursorPos - 1);
+          rangeToDelete.deleteContents();
+
+          const italicSpan = document.createElement('i');
+          italicSpan.textContent = matchText;
+
+          const insertRange = document.createRange();
+          insertRange.setStart(textNode, cursorPos - 1 - matchLength);
+          insertRange.collapse(true);
+          insertRange.insertNode(italicSpan);
+
+          const newRange = document.createRange();
+          if (italicSpan.nextSibling) {
+            newRange.setStart(italicSpan.nextSibling, 1);
+            newRange.collapse(true);
+          }
+
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          triggerChange(); // Save change
           return;
         }
       }
@@ -546,6 +704,33 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const handleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
+    // Handle Checkbox Click (Task or Visual)
+    if (target.tagName === 'INPUT' && (target.classList.contains('nexus-task') || target.classList.contains('nexus-checkbox'))) {
+      // We need to manually update the 'checked' attribute in the DOM
+      // because React/contentEditable doesn't sync attribute changes automatically for innerHTML
+      const input = target as HTMLInputElement;
+      if (input.checked) {
+        input.setAttribute('checked', 'true');
+      } else {
+        input.removeAttribute('checked');
+      }
+
+      // Trigger change to save
+      triggerChange();
+      return;
+    }
+
+    // Handle Image Selection
+    if (target.tagName === 'IMG') {
+      setSelectedImage(target as HTMLImageElement);
+      const rect = target.getBoundingClientRect();
+      setImageMenuPos({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
+      e.stopPropagation();
+      return;
+    } else {
+      setSelectedImage(null);
+    }
+
     // Handle Mentions
     if (target.classList.contains('nexus-mention') || target.closest('.nexus-mention')) {
       const mention = target.classList.contains('nexus-mention') ? target : target.closest('.nexus-mention') as HTMLElement;
@@ -580,10 +765,52 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     }
   };
 
+  const handleImageAction = (action: 'resize-up' | 'resize-down' | 'delete' | 'copy') => {
+    if (!selectedImage) return;
+
+    if (action === 'delete') {
+      selectedImage.remove();
+      setSelectedImage(null);
+    } else if (action === 'resize-up') {
+      const currentWidth = selectedImage.width;
+      selectedImage.style.width = `${currentWidth * 1.2}px`;
+    } else if (action === 'resize-down') {
+      const currentWidth = selectedImage.width;
+      selectedImage.style.width = `${currentWidth * 0.8}px`;
+    } else if (action === 'copy') {
+      // Create a temporary canvas to copy image data
+      const canvas = document.createElement('canvas');
+      canvas.width = selectedImage.naturalWidth;
+      canvas.height = selectedImage.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(selectedImage, 0, 0);
+      canvas.toBlob(blob => {
+        if (blob) {
+          const item = new ClipboardItem({ 'image/png': blob });
+          navigator.clipboard.write([item]);
+          alert('Image copied to clipboard');
+        }
+      });
+    }
+
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
   return (
     <div className="relative">
       {/* Toolbar */}
       <div className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 flex flex-wrap gap-1">
+        <button onClick={() => execCommand('undo')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Undo">
+          <Undo size={18} />
+        </button>
+        <button onClick={() => execCommand('redo')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Redo">
+          <Redo size={18} />
+        </button>
+
+        <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
         <button onClick={() => execCommand('bold')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Bold">
           <Bold size={18} />
         </button>
@@ -607,6 +834,9 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         </button>
         <button onClick={() => execCommand('formatBlock', '<h3>')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Heading 3">
           <Heading3 size={18} />
+        </button>
+        <button onClick={() => execCommand('formatBlock', '<p>')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Normal Text">
+          <Type size={18} />
         </button>
 
         <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
@@ -677,6 +907,28 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
               ))
             ) : <div className="p-2 text-xs text-slate-400 italic text-center">Type to create tag</div>
           )}
+        </div>
+      )}
+
+      {/* Image Context Menu */}
+      {selectedImage && (
+        <div
+          className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg flex p-1"
+          style={{ top: imageMenuPos.top - 50, left: imageMenuPos.left }}
+        >
+          <button onClick={() => handleImageAction('resize-up')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded" title="Enlarge">
+            <Maximize2 size={16} />
+          </button>
+          <button onClick={() => handleImageAction('resize-down')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded" title="Shrink">
+            <Minimize2 size={16} />
+          </button>
+          <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+          <button onClick={() => handleImageAction('copy')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded" title="Copy">
+            <ImageIcon size={16} />
+          </button>
+          <button onClick={() => handleImageAction('delete')} className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 rounded" title="Delete">
+            <Trash2 size={16} />
+          </button>
         </div>
       )}
     </div>
