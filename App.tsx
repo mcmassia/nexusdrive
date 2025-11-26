@@ -467,6 +467,7 @@ const App: React.FC = () => {
                 <TasksView
                   lang={lang}
                   onNavigate={(obj) => setSelectedObject(obj)}
+                  availableTypes={availableTypes}
                 />
               )
             }

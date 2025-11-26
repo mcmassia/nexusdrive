@@ -709,10 +709,71 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       // We need to manually update the 'checked' attribute in the DOM
       // because React/contentEditable doesn't sync attribute changes automatically for innerHTML
       const input = target as HTMLInputElement;
+      const isTask = target.classList.contains('nexus-task');
+
       if (input.checked) {
         input.setAttribute('checked', 'true');
+
+        // If it's a system task, append completion timestamp
+        if (isTask) {
+          const now = new Date();
+          const timestamp = ` (realizada ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')})`;
+
+          // Create a span for the timestamp
+          const span = document.createElement('span');
+          span.className = 'text-slate-400 text-xs ml-2 nexus-completion-date';
+          span.textContent = timestamp;
+          span.contentEditable = 'false'; // Prevent editing the timestamp
+
+          // Insert after the task text
+          // We need to find the end of the task text. 
+          // The structure is: <input> Task Text <br> or <block>
+          // We can insert it after the next text node?
+
+          if (input.nextSibling) {
+            // Insert after the immediate next sibling (which is usually the text node)
+            // But wait, if we uncheck, we need to remove it.
+            // Let's look for an existing completion date span first.
+            let next = input.nextSibling;
+            while (next) {
+              if (next.nodeType === Node.ELEMENT_NODE && (next as HTMLElement).classList.contains('nexus-completion-date')) {
+                // Already has date, update it? Or leave it?
+                // Let's leave it if it exists, or update it.
+                next.textContent = timestamp;
+                return;
+              }
+              // Stop if we hit a block element
+              if (next.nodeType === Node.ELEMENT_NODE && ['DIV', 'P', 'BR'].includes((next as HTMLElement).tagName)) {
+                break;
+              }
+              next = next.nextSibling;
+            }
+
+            // If not found, insert after the text node following the input
+            if (input.nextSibling.nodeType === Node.TEXT_NODE) {
+              input.parentNode?.insertBefore(span, input.nextSibling.nextSibling);
+            } else {
+              input.parentNode?.insertBefore(span, input.nextSibling);
+            }
+          }
+        }
       } else {
         input.removeAttribute('checked');
+
+        // If it's a system task, remove completion timestamp
+        if (isTask) {
+          let next = input.nextSibling;
+          while (next) {
+            if (next.nodeType === Node.ELEMENT_NODE && (next as HTMLElement).classList.contains('nexus-completion-date')) {
+              next.parentNode?.removeChild(next);
+              break;
+            }
+            if (next.nodeType === Node.ELEMENT_NODE && ['DIV', 'P', 'BR'].includes((next as HTMLElement).tagName)) {
+              break;
+            }
+            next = next.nextSibling;
+          }
+        }
       }
 
       // Trigger change to save

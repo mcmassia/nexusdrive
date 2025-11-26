@@ -69,7 +69,10 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                     if (['DIV', 'P', 'H1', 'H2', 'H3', 'LI', 'UL', 'OL', 'BLOCKQUOTE'].includes(element.tagName)) {
                         break;
                     }
-                    taskContent += element.textContent;
+                    // Skip completion date
+                    if (!element.classList.contains('nexus-completion-date')) {
+                        taskContent += element.textContent;
+                    }
                 }
                 nextNode = nextNode.nextSibling;
             }
