@@ -307,9 +307,25 @@ const App: React.FC = () => {
       allowedTypes: prop.allowedTypes
     })) || [];
 
+    // Daily Note Logic
+    let finalTitle = title;
+    if (type === NexusType.DAILY_NOTE) {
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+
+      // Check if a Daily note with this date already exists
+      const existingNote = objects.find(o => o.type === NexusType.DAILY_NOTE && o.title === dateStr);
+
+      if (existingNote) {
+        finalTitle = 'Untitled';
+      } else {
+        finalTitle = dateStr;
+      }
+    }
+
     const newObj: NexusObject = {
       id: Date.now().toString(),
-      title: title || 'Untitled',
+      title: finalTitle || 'Untitled',
       type,
       content: '',
       metadata,

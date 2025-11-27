@@ -6,7 +6,8 @@ export enum NexusType {
   MEETING = 'Meeting',
   PROJECT = 'Project',
   NOTE = 'Note',
-  EMAIL = 'Email'
+  EMAIL = 'Email',
+  DAILY_NOTE = 'Daily note'
 }
 
 export interface NexusProperty {
