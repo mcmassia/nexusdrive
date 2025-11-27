@@ -1089,6 +1089,12 @@ class LocalDatabase {
   }
 
   async initializeDefaultSchemas(): Promise<void> {
+    // Check if any schemas exist first
+    const existingSchemas = await this.getAllTypeSchemas();
+    if (existingSchemas.length > 0) {
+      return;
+    }
+
     const defaultSchemas: TypeSchema[] = [
       {
         type: NexusType.PERSON,
@@ -1124,10 +1130,7 @@ class LocalDatabase {
     ];
 
     for (const schema of defaultSchemas) {
-      const existing = await this.getTypeSchema(schema.type);
-      if (!existing) {
-        await this.saveTypeSchema(schema);
-      }
+      await this.saveTypeSchema(schema);
     }
 
     console.log('[LocalDB] Initialized default type schemas');

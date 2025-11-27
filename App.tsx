@@ -496,7 +496,7 @@ const App: React.FC = () => {
 
                 {
                   currentView === 'settings' && (
-                    <SettingsView lang={lang} />
+                    <SettingsView lang={lang} objects={objects} />
                   )
                 }
 

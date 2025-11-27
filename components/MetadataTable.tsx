@@ -138,7 +138,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
 
       case 'multiselect':
         // Get options from schema if available
-        const availableOptions = schemaProp?.options || [];
+        const availableOptions = (schemaProp?.options || []).sort();
 
         const rawValue = prop.value || [];
         const selected = Array.isArray(rawValue) ? rawValue : (rawValue as string).split(',').filter(Boolean);
@@ -162,21 +162,38 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
 
             {/* If we have predefined options, show a select/dropdown */}
             {availableOptions.length > 0 ? (
-              <select
-                className="bg-transparent text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none"
-                onChange={(e) => {
-                  if (e.target.value && !selected.includes(e.target.value)) {
-                    handleValueChange(index, [...selected, e.target.value]);
-                    e.target.value = '';
-                  }
-                }}
-                value=""
-              >
-                <option value="">+ Add option</option>
-                {availableOptions.filter(opt => !selected.includes(opt)).map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  className="bg-transparent text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none max-w-[150px]"
+                  onChange={(e) => {
+                    if (e.target.value && !selected.includes(e.target.value)) {
+                      handleValueChange(index, [...selected, e.target.value]);
+                      e.target.value = '';
+                    }
+                  }}
+                  value=""
+                >
+                  <option value="">+ Add option</option>
+                  {availableOptions.filter(opt => !selected.includes(opt)).map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {/* Allow adding custom option even if list exists */}
+                <input
+                  type="text"
+                  placeholder="+ New"
+                  className="bg-transparent outline-none text-xs border-b border-transparent hover:border-slate-300 focus:border-blue-500 w-20 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = e.currentTarget.value.trim();
+                      if (val && !selected.includes(val)) {
+                        handleValueChange(index, [...selected, val]);
+                        e.currentTarget.value = '';
+                      }
+                    }
+                  }}
+                />
+              </div>
             ) : (
               // Fallback to text input if no options defined
               <input
@@ -199,18 +216,35 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
 
       case 'select':
         // Get options from schema if available
-        const selectOptions = schemaProp?.options || [];
+        const selectOptions = (schemaProp?.options || []).sort();
         return (
-          <select
-            value={prop.value as string || ''}
-            onChange={(e) => handleValueChange(index, e.target.value)}
-            className="w-full bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
-          >
-            <option value="">Select...</option>
-            {selectOptions.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+          <div className="flex gap-2 items-center">
+            <select
+              value={prop.value as string || ''}
+              onChange={(e) => handleValueChange(index, e.target.value)}
+              className="w-full bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
+            >
+              <option value="">Select...</option>
+              {selectOptions.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            {/* Allow adding custom option */}
+            <input
+              type="text"
+              placeholder="+ New"
+              className="bg-transparent outline-none text-xs border-b border-transparent hover:border-slate-300 focus:border-blue-500 w-20 transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const val = e.currentTarget.value.trim();
+                  if (val) {
+                    handleValueChange(index, val);
+                    e.currentTarget.value = '';
+                  }
+                }
+              }}
+            />
+          </div>
         );
 
       case 'document':
@@ -280,6 +314,43 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
               >
                 Open ↗
               </a>
+            )}
+          </div>
+        );
+
+      case 'image':
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={prop.value as string}
+                onChange={(e) => handleValueChange(index, e.target.value)}
+                className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
+                placeholder="Image URL..."
+              />
+              {prop.value && (
+                <a
+                  href={prop.value as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs flex items-center"
+                >
+                  Open ↗
+                </a>
+              )}
+            </div>
+            {prop.value && (
+              <div className="relative w-full h-32 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden border border-slate-200 dark:border-slate-700">
+                <img
+                  src={prop.value as string}
+                  alt={prop.label}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
             )}
           </div>
         );

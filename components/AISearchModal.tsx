@@ -17,6 +17,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
   const [response, setResponse] = useState<string | null>(null);
   const [results, setResults] = useState<NexusObject[]>([]);
   const [searchResults, setSearchResults] = useState<NexusObject[]>([]);
+  const [typeColors, setTypeColors] = useState<Record<string, string>>({});
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +35,18 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     setIsLoading(false);
   };
 
+  React.useEffect(() => {
+    const loadColors = async () => {
+      const schemas = await db.getAllTypeSchemas();
+      const colors: Record<string, string> = {};
+      schemas.forEach(s => {
+        if (s.color) colors[s.type] = s.color;
+      });
+      setTypeColors(colors);
+    };
+    loadColors();
+  }, []);
+
   // Effect to colorize mentions after response is rendered
   React.useEffect(() => {
     if (!response) return;
@@ -41,9 +54,6 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     const colorize = async () => {
       const container = document.getElementById('ai-response-content');
       if (!container) return;
-
-      const schemas = await db.getAllTypeSchemas();
-      const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
 
       const mentions = container.querySelectorAll('.nexus-mention');
       mentions.forEach(mention => {
@@ -57,8 +67,8 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
           if (obj) type = obj.type;
         }
 
-        if (type && schemaMap.has(type)) {
-          el.style.color = schemaMap.get(type) || '#3b82f6';
+        if (type && typeColors[type]) {
+          el.style.color = typeColors[type];
         } else {
           // Fallback default color
           el.style.color = '#3b82f6';
@@ -68,7 +78,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
 
     // Small timeout to ensure DOM is ready
     setTimeout(colorize, 100);
-  }, [response, results]);
+  }, [response, results, typeColors]);
 
   // Real-time search effect (only in search mode)
   React.useEffect(() => {
@@ -128,18 +138,6 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
         // Optional: Show a toast or alert
         // alert(lang === 'es' ? 'Documento no encontrado' : 'Document not found');
       }
-    }
-  };
-
-  // Helper to get color for type
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'Page': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'Person': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-      case 'Meeting': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
-      case 'Project': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
-      case 'Email': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-      default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
   };
 
@@ -234,7 +232,14 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                         className="text-left bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group flex flex-col gap-2"
                       >
                         <div className="flex items-start justify-between w-full">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold ${getTypeColor(obj.type)}`}>
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
+                            style={{
+                              backgroundColor: typeColors[obj.type] ? `${typeColors[obj.type]}20` : '#f1f5f9',
+                              color: typeColors[obj.type] || '#64748b',
+                              borderColor: typeColors[obj.type] ? `${typeColors[obj.type]}40` : '#e2e8f0'
+                            }}
+                          >
                             {obj.type}
                           </span>
                           <span className="text-[10px] text-slate-400">
@@ -318,7 +323,14 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                           className="text-left bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group flex flex-col gap-2"
                         >
                           <div className="flex items-start justify-between w-full">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold ${getTypeColor(obj.type)}`}>
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
+                              style={{
+                                backgroundColor: typeColors[obj.type] ? `${typeColors[obj.type]}20` : '#f1f5f9',
+                                color: typeColors[obj.type] || '#64748b',
+                                borderColor: typeColors[obj.type] ? `${typeColors[obj.type]}40` : '#e2e8f0'
+                              }}
+                            >
                               {obj.type}
                             </span>
                             <span className="text-[10px] text-slate-400">

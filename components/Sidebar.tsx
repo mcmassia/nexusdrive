@@ -158,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           title={lang === 'es' ? 'Tipos de objeto' : 'Object Types'}
         >
           <Settings size={16} className="shrink-0" />
-          {!isCollapsed && <span>{lang === 'es' ? 'Tipos de objeto' : 'Object Types'}</span>}
+          {!isCollapsed && <span>{lang === 'es' ? 'Ajustes' : 'Settings'}</span>}
         </button>
       </div>
 

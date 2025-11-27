@@ -3,9 +3,18 @@ import { TypeSchema, NexusType } from '../types';
 import { db } from '../services/db';
 import { Settings, Edit2, Plus, Trash2, FileText, User, Calendar, Briefcase } from 'lucide-react';
 import { TYPE_CONFIG } from '../constants';
-import PropertyEditor from './PropertyEditor';
 
-const TypeManager: React.FC = () => {
+import PropertyEditor from './PropertyEditor';
+import { useNotification } from './NotificationContext';
+
+import { NexusObject } from '../types';
+
+interface TypeManagerProps {
+    objects?: NexusObject[];
+}
+
+const TypeManager: React.FC<TypeManagerProps> = ({ objects = [] }) => {
+    const { confirm } = useNotification();
     const [schemas, setSchemas] = useState<TypeSchema[]>([]);
     const [editingSchema, setEditingSchema] = useState<TypeSchema | null>(null);
     const [creatingNew, setCreatingNew] = useState(false);
@@ -27,6 +36,21 @@ const TypeManager: React.FC = () => {
         const allSchemas = await db.getAllTypeSchemas();
         setSchemas(allSchemas);
     };
+
+    // ... (import logic remains the same, skipping for brevity in this replacement block if possible, but replace_file_content needs contiguous block. 
+    // Since I need to change the render and handleDeleteType, I'll keep the import logic as is or assume it's outside the block if I target correctly.
+    // Wait, the import logic is huge. I should try to target only the parts I need to change.
+    // But I need to change the component signature and the render.
+    // Let's replace the whole component body to be safe and clean.)
+
+    // Actually, I can keep the import logic if I carefully target the render part and the handleDeleteType function.
+    // But I also need to change the props.
+    // Let's do it in chunks.
+
+    // Chunk 1: Props and handleDeleteType
+    // Chunk 2: Render
+
+    // Let's try to do it all in one go but I'll paste the import logic back in to avoid deleting it.
 
     const handleZipImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -185,6 +209,39 @@ const TypeManager: React.FC = () => {
 
     const handleSaveSchema = async (schema: TypeSchema) => {
         await db.saveTypeSchema(schema);
+
+        // Propagate changes to all existing objects of this type
+        const allObjects = await db.getObjects();
+        const affectedObjects = allObjects.filter(o => o.type === schema.type);
+
+        if (affectedObjects.length > 0) {
+            const updatePromises = affectedObjects.map(obj => {
+                // Create new metadata based on the new schema
+                const newMetadata = schema.properties.map(prop => {
+                    // Try to find existing value
+                    const existingProp = obj.metadata?.find(p => p.key === prop.key);
+
+                    return {
+                        key: prop.key,
+                        label: prop.label,
+                        type: prop.type,
+                        value: existingProp ? existingProp.value : (prop.defaultValue || ''),
+                        // Preserve or update other fields
+                        options: prop.options,
+                        allowedTypes: prop.allowedTypes
+                    };
+                });
+
+                return db.saveObject({
+                    ...obj,
+                    metadata: newMetadata
+                });
+            });
+
+            await Promise.all(updatePromises);
+            console.log(`Updated ${affectedObjects.length} objects with new schema for ${schema.type}`);
+        }
+
         await loadSchemas();
         setEditingSchema(null);
         setCreatingNew(false);
@@ -208,25 +265,42 @@ const TypeManager: React.FC = () => {
     };
 
     const handleDeleteType = async (type: string) => {
-        const builtInTypes = Object.values(NexusType);
-        if (builtInTypes.includes(type as NexusType)) {
-            alert('Cannot delete built-in types');
+        const count = objects.filter(o => o.type === type).length;
+
+        if (count > 0) {
+            // We can use the custom alert here too if we want, or just keep the alert.
+            // But the user specifically asked for the delete confirmation.
+            // Let's stick to alert for the "cannot delete" message for now as it's an error/info, 
+            // or better, use addNotification if available (but that's a toast).
+            // Let's use alert for the blocking message as it was before, or maybe a non-destructive confirm with only "OK" and no cancel?
+            // No, confirm implies choice.
+            // I'll keep alert for the blocking message for now, as the request was about "al eliminar" (when deleting).
+            alert(`Cannot delete type "${type}" because it has ${count} existing document(s). Please delete the documents first.`);
             return;
         }
 
-        const confirm = window.confirm(`Delete type "${type}"? This will not delete existing documents.`);
-        if (confirm) {
+        const isConfirmed = await confirm({
+            message: `¿Eliminar tipo "${type}"?`,
+            description: 'Esta acción no se puede deshacer.',
+            confirmLabel: 'Eliminar',
+            cancelLabel: 'Cancelar',
+            isDestructive: true
+        });
+
+        if (isConfirmed) {
             await db.deleteTypeSchema(type);
             await loadSchemas();
         }
     };
 
     if (editingSchema) {
+        const allTypes = schemas.map(s => s.type);
         return (
             <PropertyEditor
                 schema={editingSchema}
                 onSave={handleSaveSchema}
                 onCancel={() => setEditingSchema(null)}
+                allTypes={allTypes}
             />
         );
     }
@@ -281,80 +355,83 @@ const TypeManager: React.FC = () => {
                     </button>
                 )}
 
-                {/* Type List */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {schemas.map((schema) => {
-                        const isBuiltIn = Object.values(NexusType).includes(schema.type as NexusType);
-                        const iconName = TYPE_CONFIG[schema.type as NexusType]?.icon;
-                        const Icon = (iconName === 'User' ? User :
-                            iconName === 'Calendar' ? Calendar :
-                                iconName === 'Briefcase' ? Briefcase :
-                                    FileText);
+                {/* Type Table */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Properties</th>
+                                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Documents</th>
+                                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                            {schemas.map((schema) => {
+                                const isBuiltIn = Object.values(NexusType).includes(schema.type as NexusType);
+                                const iconName = TYPE_CONFIG[schema.type as NexusType]?.icon;
+                                const Icon = (iconName === 'User' ? User :
+                                    iconName === 'Calendar' ? Calendar :
+                                        iconName === 'Briefcase' ? Briefcase :
+                                            FileText);
+                                const docCount = objects.filter(o => o.type === schema.type).length;
 
-                        return (
-                            <div
-                                key={schema.type}
-                                className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800/50 hover:shadow-md transition-shadow"
-                            >
-                                <div className="flex items-start justify-between mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700/50">
-                                            <Icon size={24} style={{ color: schema.color || '#94a3b8' }} />
-                                        </div>
-                                        <div>
-                                            <h3
-                                                className="text-lg font-semibold dark:text-slate-100"
-                                            >
-                                                {schema.type}
-                                            </h3>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                                                {schema.properties.length} {schema.properties.length === 1 ? 'property' : 'properties'}
-                                                {isBuiltIn && <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Built-in)</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setEditingSchema(schema)}
-                                            className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                            title="Edit schema"
-                                        >
-                                            <Edit2 size={18} />
-                                        </button>
-                                        {!isBuiltIn && (
-                                            <button
-                                                onClick={() => handleDeleteType(schema.type)}
-                                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                title="Delete type"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Property List */}
-                                {schema.properties.length > 0 && (
-                                    <div className="space-y-1">
-                                        {schema.properties.slice(0, 4).map((prop) => (
-                                            <div key={prop.key} className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                                <span className="text-xs text-slate-400">•</span>
-                                                <span className="font-medium">{prop.label}</span>
-                                                <span className="text-xs text-slate-400">({prop.type})</span>
-                                                {prop.required && <span className="text-xs text-red-500">*</span>}
+                                return (
+                                    <tr key={schema.type} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700/50">
+                                                    <Icon size={20} style={{ color: schema.color || '#94a3b8' }} />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-slate-900 dark:text-slate-100">{schema.type}</div>
+                                                    {isBuiltIn && <div className="text-xs text-blue-600 dark:text-blue-400">Built-in</div>}
+                                                </div>
                                             </div>
-                                        ))}
-                                        {schema.properties.length > 4 && (
-                                            <div className="text-xs text-slate-400 italic">
-                                                +{schema.properties.length - 4} more...
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm text-slate-600 dark:text-slate-400">
+                                                {schema.properties.length} properties
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                                            <div className="text-xs text-slate-400 truncate max-w-[200px]">
+                                                {schema.properties.map(p => p.label).join(', ')}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${docCount > 0
+                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                                : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                                                }`}>
+                                                {docCount}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => setEditingSchema(schema)}
+                                                    className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                                    title="Edit schema"
+                                                >
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteType(schema.type)}
+                                                    disabled={docCount > 0}
+                                                    className={`p-2 rounded transition-colors ${docCount > 0
+                                                        ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                                                        : 'text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                                        }`}
+                                                    title={docCount > 0 ? `Cannot delete: ${docCount} documents exist` : "Delete type"}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
 
                 {schemas.length === 0 && (

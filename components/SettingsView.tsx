@@ -3,11 +3,14 @@ import { Database, Mail, Settings as SettingsIcon } from 'lucide-react';
 import TypeManager from './TypeManager';
 import GmailConfig from './GmailConfig';
 
+import { NexusObject } from '../types';
+
 interface SettingsViewProps {
     lang: 'en' | 'es';
+    objects: NexusObject[];
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ lang }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
     const [activeTab, setActiveTab] = useState<'types' | 'gmail'>('types');
 
     return (
@@ -50,7 +53,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang }) => {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
-                {activeTab === 'types' && <TypeManager />}
+                {activeTab === 'types' && <TypeManager objects={objects} />}
                 {activeTab === 'gmail' && <GmailConfig lang={lang} />}
             </div>
         </div>

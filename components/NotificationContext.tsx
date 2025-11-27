@@ -21,7 +21,7 @@ interface NotificationContextType {
     addNotification: (notification: Omit<Notification, 'id'>) => string;
     removeNotification: (id: string) => void;
     clearNotifications: () => void;
-    confirm: (options: { message: string; description?: string }) => Promise<boolean>;
+    confirm: (options: { message: string; description?: string; confirmLabel?: string; cancelLabel?: string; isDestructive?: boolean }) => Promise<boolean>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -31,6 +31,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [confirmation, setConfirmation] = useState<{
         message: string;
         description?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        isDestructive?: boolean;
         onConfirm: () => void;
         onCancel: () => void;
     } | null>(null);
@@ -59,11 +62,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         setNotifications([]);
     }, []);
 
-    const confirm = useCallback((options: { message: string; description?: string }): Promise<boolean> => {
+    const confirm = useCallback((options: { message: string; description?: string; confirmLabel?: string; cancelLabel?: string; isDestructive?: boolean }): Promise<boolean> => {
         return new Promise((resolve) => {
             setConfirmation({
                 message: options.message,
                 description: options.description,
+                confirmLabel: options.confirmLabel,
+                cancelLabel: options.cancelLabel,
+                isDestructive: options.isDestructive !== undefined ? options.isDestructive : true,
                 onConfirm: () => {
                     setConfirmation(null);
                     resolve(true);
@@ -95,13 +101,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
                                 onClick={confirmation.onCancel}
                                 className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             >
-                                Cancel
+                                {confirmation.cancelLabel || 'Cancel'}
                             </button>
                             <button
                                 onClick={confirmation.onConfirm}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors"
+                                className={`px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${confirmation.isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
                             >
-                                Delete
+                                {confirmation.confirmLabel || 'Delete'}
                             </button>
                         </div>
                     </div>
