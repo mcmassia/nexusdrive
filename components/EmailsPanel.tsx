@@ -20,6 +20,7 @@ interface EmailPreview {
     snippet: string;
     hasAttachments: boolean;
     labels: string[];
+    owner?: string;
 }
 
 const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
@@ -29,6 +30,8 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
     const [error, setError] = useState<string | null>(null);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
+    const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
+    const [accountMap, setAccountMap] = useState<Record<string, { color: string, name: string }>>({});
 
     // State for document creation
     const [creationEmail, setCreationEmail] = useState<EmailPreview | null>(null);
@@ -38,13 +41,36 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
 
     useEffect(() => {
         loadEmails();
+        loadAccountInfo();
     }, []);
+
+    const loadAccountInfo = async () => {
+        const prefs = await db.getGmailPreferences();
+        const map: Record<string, { color: string, name: string }> = {};
+
+        // Primary account (we don't have its picture easily here without authService, but we can use a default color)
+        // Actually, let's just map secondary accounts for now, or fetch user from authService if possible?
+        // db.ts doesn't expose authService directly. 
+        // We can assume if owner is not in connectedAccounts, it's primary.
+
+        if (prefs?.connectedAccounts) {
+            prefs.connectedAccounts.forEach((acc, index) => {
+                // Generate a consistent color based on index or name
+                const colors = ['bg-purple-500', 'bg-green-500', 'bg-yellow-500', 'bg-pink-500'];
+                map[acc.email] = {
+                    color: colors[index % colors.length],
+                    name: acc.name
+                };
+            });
+        }
+        setAccountMap(map);
+    };
 
     const loadEmails = async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const messages = await db.getGmailMessages(10);
+            const messages = await db.getGmailMessages(20); // Increased limit to see more
             setEmails(messages as EmailPreview[]);
         } catch (err) {
             console.error('Error loading emails:', err);
@@ -73,24 +99,52 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
         setEmailToDelete(emailId);
     };
 
+    const handleBulkDeleteClick = () => {
+        if (selectedEmails.size === 0) return;
+        // Trigger confirmation for bulk delete
+        // We use a special ID 'BULK' to indicate bulk delete in the state, 
+        // or we could add a separate state. For simplicity, let's use a separate state or just reuse emailToDelete with a flag?
+        // Better to use a separate state or just handle it in confirmDelete.
+        // Let's use emailToDelete = 'BULK' as a flag.
+        setEmailToDelete('BULK');
+    };
+
     const confirmDelete = async () => {
         if (!emailToDelete) return;
 
         try {
-            await db.deleteGmailMessage(emailToDelete);
+            if (emailToDelete === 'BULK') {
+                // Bulk delete
+                for (const id of selectedEmails) {
+                    await db.deleteGmailMessage(id);
+                }
+                setSelectedEmails(new Set());
+            } else {
+                // Single delete
+                await db.deleteGmailMessage(emailToDelete);
+            }
             await loadEmails();
         } catch (err) {
             console.error('Error deleting email:', err);
-            alert(lang === 'es' ? 'Error al eliminar' : 'Error deleting'); // Keep alert for now, can be replaced with a notification system
+            alert(lang === 'es' ? 'Error al eliminar' : 'Error deleting');
         } finally {
             setEmailToDelete(null);
         }
     };
 
-    const openInGmail = (emailId: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        // Open email directly in Gmail
-        const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${emailId}`;
+    const openInGmail = (emailId: string, e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        // Find the email object to get the owner
+        const email = emails.find(e => e.id === emailId);
+        const ownerEmail = email?.owner;
+
+        let gmailUrl;
+        if (ownerEmail) {
+            // Use authuser query param which is more reliable than /u/X/
+            gmailUrl = `https://mail.google.com/mail/u/?authuser=${ownerEmail}#inbox/${emailId}`;
+        } else {
+            gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${emailId}`;
+        }
         window.open(gmailUrl, '_blank');
     };
 
@@ -120,6 +174,25 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
         setTriggerRect(null);
     };
 
+    const toggleSelection = (emailId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newSelected = new Set(selectedEmails);
+        if (newSelected.has(emailId)) {
+            newSelected.delete(emailId);
+        } else {
+            newSelected.add(emailId);
+        }
+        setSelectedEmails(newSelected);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedEmails.size === emails.length) {
+            setSelectedEmails(new Set());
+        } else {
+            setSelectedEmails(new Set(emails.map(e => e.id)));
+        }
+    };
+
     const extractSender = (from: string): string => {
         const match = from.match(/^(.+?)\s*<(.+?)>$/);
         return match ? match[1].trim() : from;
@@ -146,15 +219,32 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
             {/* Header */}
             <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'} p-4 border-b border-slate-200 dark:border-slate-700`}>
                 <div className="flex items-center gap-2">
+                    {!isCollapsed && (
+                        <input
+                            type="checkbox"
+                            checked={emails.length > 0 && selectedEmails.size === emails.length}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                    )}
                     <Mail className="w-5 h-5 text-blue-500" />
                     {!isCollapsed && (
                         <h3 className="font-semibold text-slate-900 dark:text-white">
-                            {lang === 'es' ? 'Correos' : 'Emails'}
+                            {selectedEmails.size > 0 ? `${selectedEmails.size} selected` : (lang === 'es' ? 'Correos' : 'Emails')}
                         </h3>
                     )}
                 </div>
 
                 <div className={`flex items-center gap-1 ${isCollapsed ? 'flex-col' : ''}`}>
+                    {!isCollapsed && selectedEmails.size > 0 && (
+                        <button
+                            onClick={handleBulkDeleteClick}
+                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                            title={lang === 'es' ? 'Eliminar seleccionados' : 'Delete selected'}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
                     <button
                         onClick={handleSync}
                         disabled={isSyncing}
@@ -207,10 +297,16 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
                         {emails.map((email) => {
                             const isUnread = email.labels?.includes('UNREAD');
+                            const isSelected = selectedEmails.has(email.id);
 
                             if (isCollapsed) {
                                 return (
-                                    <div key={email.id} className="p-3 flex justify-center hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" title={email.subject}>
+                                    <div
+                                        key={email.id}
+                                        className="p-3 flex justify-center hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                                        title={email.subject}
+                                        onClick={(e) => openInGmail(email.id, e)}
+                                    >
                                         <div className={`w-2 h-2 rounded-full ${isUnread ? 'bg-blue-500' : 'bg-slate-300'}`} />
                                     </div>
                                 );
@@ -223,27 +319,43 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                     px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 
                     transition-colors group
                     ${isUnread ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}
+                    ${isSelected ? 'bg-blue-100/50 dark:bg-blue-900/30' : ''}
                   `}
                                 >
                                     {/* Email Info */}
                                     <div className="flex items-start justify-between gap-3 mb-2">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className={`text-sm truncate ${isUnread ? 'font-semibold' : 'font-medium'} text-slate-900 dark:text-white`}>
-                                                    {extractSender(email.from)}
-                                                </span>
-                                                {email.hasAttachments && (
-                                                    <Paperclip className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={(e) => toggleSelection(email.id, e)}
+                                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 opacity-0 group-hover:opacity-100 transition-opacity data-[checked=true]:opacity-100"
+                                                data-checked={isSelected}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {email.owner && accountMap[email.owner] && (
+                                                        <div
+                                                            className={`w-2 h-2 rounded-full ${accountMap[email.owner].color}`}
+                                                            title={accountMap[email.owner].name}
+                                                        />
+                                                    )}
+                                                    <span className={`text-sm truncate ${isUnread ? 'font-semibold' : 'font-medium'} text-slate-900 dark:text-white`}>
+                                                        {extractSender(email.from)}
+                                                    </span>
+                                                    {email.hasAttachments && (
+                                                        <Paperclip className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                                    )}
+                                                </div>
+                                                <div className={`text-sm truncate ${isUnread ? 'font-medium' : ''} text-slate-700 dark:text-slate-300`}>
+                                                    {email.subject || <span className="italic text-slate-400">(No subject)</span>}
+                                                </div>
+                                                {email.snippet && (
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
+                                                        {email.snippet}
+                                                    </p>
                                                 )}
                                             </div>
-                                            <div className={`text-sm truncate ${isUnread ? 'font-medium' : ''} text-slate-700 dark:text-slate-300`}>
-                                                {email.subject || <span className="italic text-slate-400">(No subject)</span>}
-                                            </div>
-                                            {email.snippet && (
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
-                                                    {email.snippet}
-                                                </p>
-                                            )}
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
                                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
@@ -261,7 +373,7 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                                     </div>
 
                                     {/* Action Buttons */}
-                                    <div className="flex items-center gap-2 mt-2">
+                                    <div className="flex items-center gap-2 mt-2 pl-7">
                                         <button
                                             onClick={(e) => openInGmail(email.id, e)}
                                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
@@ -311,8 +423,12 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
 
             <ConfirmDialog
                 isOpen={!!emailToDelete}
-                title={lang === 'es' ? 'Eliminar correo' : 'Delete Email'}
-                message={lang === 'es' ? '¿Estás seguro de que quieres eliminar este correo? Esta acción no se puede deshacer.' : 'Are you sure you want to delete this email? This action cannot be undone.'}
+                title={emailToDelete === 'BULK'
+                    ? (lang === 'es' ? 'Eliminar correos' : 'Delete Emails')
+                    : (lang === 'es' ? 'Eliminar correo' : 'Delete Email')}
+                message={emailToDelete === 'BULK'
+                    ? (lang === 'es' ? `¿Estás seguro de que quieres eliminar ${selectedEmails.size} correos?` : `Are you sure you want to delete ${selectedEmails.size} emails?`)
+                    : (lang === 'es' ? '¿Estás seguro de que quieres eliminar este correo? Esta acción no se puede deshacer.' : 'Are you sure you want to delete this email? This action cannot be undone.')}
                 confirmLabel={lang === 'es' ? 'Eliminar' : 'Delete'}
                 cancelLabel={lang === 'es' ? 'Cancelar' : 'Cancel'}
                 onConfirm={confirmDelete}

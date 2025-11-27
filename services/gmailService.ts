@@ -86,8 +86,7 @@ class GmailService {
 
         const params = new URLSearchParams({
             maxResults: maxResults.toString(),
-            q: query,
-            includeSpamTrash: 'true' // Allow searching everywhere if query specifies it
+            q: query
         });
         if (pageToken) params.append('pageToken', pageToken);
 
@@ -169,8 +168,8 @@ class GmailService {
             );
 
             if (response.status === 403) {
-                console.warn(`[GmailService] 403 Forbidden for message ${messageId} (full). Attempting fallback to metadata...`);
-                // Fallback to metadata if full access is denied
+                // Silently fallback to metadata if full access is denied
+                // This is expected for some scopes/accounts
                 response = await fetch(
                     `${this.baseUrl}/users/${userId}/messages/${messageId}?format=metadata`,
                     { headers: this.getHeaders(accessToken) }
@@ -337,6 +336,33 @@ class GmailService {
             });
         }
         return mockEmails;
+    }
+
+    /**
+     * Trash a message (move to trash)
+     */
+    async trashMessage(userId: string = 'me', messageId: string, accessToken?: string): Promise<void> {
+        if (authService.isInDemoMode()) {
+            console.log(`[GmailService] Demo mode: Trashing message ${messageId}`);
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `${this.baseUrl}/users/${userId}/messages/${messageId}/trash`,
+                {
+                    method: 'POST',
+                    headers: this.getHeaders(accessToken)
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to trash message: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error(`[GmailService] Error trashing message ${messageId}:`, error);
+            throw error;
+        }
     }
 
     private emailDataToGmailMessage(data: EmailData): GmailMessage {

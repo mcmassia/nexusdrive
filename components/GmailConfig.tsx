@@ -4,6 +4,7 @@ import { GmailPreferences, ConnectedAccount } from '../types';
 import { Save, RefreshCw, Clock, Filter, Folder, Mail, Plus, Trash2, User } from 'lucide-react';
 import { gmailService } from '../services/gmailService';
 import { authService } from '../services/authService';
+import { useNotification } from './NotificationContext';
 
 interface GmailConfigProps {
     lang: 'en' | 'es';
@@ -15,6 +16,8 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
     const [availableLabels, setAvailableLabels] = useState<{ id: string; name: string }[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [currentUser, setCurrentUser] = useState(authService.getUser());
+
+    const { addNotification } = useNotification();
 
     useEffect(() => {
         loadPreferences();
@@ -46,7 +49,11 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
                 // Check if already exists
                 const existing = prefs.connectedAccounts || [];
                 if (existing.some(a => a.email === newAccount.email)) {
-                    alert(lang === 'es' ? 'Esta cuenta ya está conectada' : 'This account is already connected');
+                    addNotification({
+                        type: 'warning',
+                        message: lang === 'es' ? 'Cuenta ya conectada' : 'Account already connected',
+                        description: lang === 'es' ? 'Esta cuenta de Google ya está vinculada.' : 'This Google account is already linked.'
+                    });
                     return;
                 }
 
@@ -55,11 +62,19 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
 
                 await db.saveGmailPreferences(updatedPrefs);
                 setPrefs(updatedPrefs);
-                alert(lang === 'es' ? 'Cuenta añadida correctamente' : 'Account added successfully');
+                addNotification({
+                    type: 'success',
+                    message: lang === 'es' ? 'Cuenta añadida' : 'Account added',
+                    description: lang === 'es' ? 'La cuenta se ha conectado correctamente.' : 'Account connected successfully.'
+                });
             }
         } catch (error) {
             console.error('Error adding account:', error);
-            alert(lang === 'es' ? 'Error al añadir cuenta' : 'Error adding account');
+            addNotification({
+                type: 'error',
+                message: lang === 'es' ? 'Error' : 'Error',
+                description: lang === 'es' ? 'No se pudo añadir la cuenta.' : 'Could not add account.'
+            });
         }
     };
 
@@ -72,6 +87,10 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
 
         await db.saveGmailPreferences(updatedPrefs);
         setPrefs(updatedPrefs);
+        addNotification({
+            type: 'info',
+            message: lang === 'es' ? 'Cuenta desconectada' : 'Account disconnected'
+        });
     };
 
     const handleSave = async () => {
@@ -100,15 +119,30 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
                 queryParts.push(`after:${dateStr}`);
             }
 
-            const finalQuery = queryParts.join(' ');
+            let finalQuery = queryParts.join(' ');
+
+            // Sanitize query to remove harmful params like format=full if user manually added them (though here we build it)
+            // But if we were editing raw query string, we would need this. 
+            // Since we build it from UI, it's safe. 
+            // However, let's ensure prefs.syncQuery (if editable directly in future) is clean.
+            // For now, we overwrite syncQuery with our constructed one.
+
             const updatedPrefs = { ...prefs, syncQuery: finalQuery };
 
             await db.saveGmailPreferences(updatedPrefs);
             setPrefs(updatedPrefs);
-            alert(lang === 'es' ? 'Configuración guardada' : 'Settings saved');
+            addNotification({
+                type: 'success',
+                message: lang === 'es' ? 'Guardado' : 'Saved',
+                description: lang === 'es' ? 'Configuración actualizada correctamente.' : 'Configuration updated successfully.'
+            });
         } catch (error) {
             console.error('Error saving preferences:', error);
-            alert(lang === 'es' ? 'Error al guardar' : 'Error saving');
+            addNotification({
+                type: 'error',
+                message: lang === 'es' ? 'Error' : 'Error',
+                description: lang === 'es' ? 'No se pudo guardar la configuración.' : 'Could not save configuration.'
+            });
         } finally {
             setIsSaving(false);
         }
@@ -154,7 +188,12 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
                     {currentUser && (
                         <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                             <div className="flex items-center gap-3">
-                                <img src={currentUser.picture} alt={currentUser.name} className="w-8 h-8 rounded-full" />
+                                <img
+                                    src={currentUser.picture}
+                                    alt={currentUser.name}
+                                    className="w-8 h-8 rounded-full"
+                                    referrerPolicy="no-referrer"
+                                />
                                 <div>
                                     <div className="font-medium text-slate-800 dark:text-slate-200">{currentUser.name}</div>
                                     <div className="text-xs text-slate-500">{currentUser.email}</div>
@@ -170,7 +209,12 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
                     {prefs.connectedAccounts?.map(account => (
                         <div key={account.email} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                             <div className="flex items-center gap-3">
-                                <img src={account.picture} alt={account.name} className="w-8 h-8 rounded-full" />
+                                <img
+                                    src={account.picture}
+                                    alt={account.name}
+                                    className="w-8 h-8 rounded-full"
+                                    referrerPolicy="no-referrer"
+                                />
                                 <div>
                                     <div className="font-medium text-slate-800 dark:text-slate-200">{account.name}</div>
                                     <div className="text-xs text-slate-500">{account.email}</div>

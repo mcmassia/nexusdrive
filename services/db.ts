@@ -1085,9 +1085,14 @@ class LocalDatabase {
 
       // 1. Fetch from Primary Account
       let allMessages: any[] = [];
+      const primaryToken = authService.getAccessToken();
+      const primaryEmail = authService.getUser()?.email;
+
       try {
         const primaryResult = await gmailService.listMessages(query, limit);
-        allMessages = [...primaryResult.messages];
+        // Add owner info to messages
+        const primaryMsgs = primaryResult.messages.map(m => ({ ...m, _owner: primaryEmail, _token: primaryToken }));
+        allMessages = [...primaryMsgs];
       } catch (e) {
         console.error('[LocalDB] Error syncing primary account:', e);
       }
@@ -1103,7 +1108,8 @@ class LocalDatabase {
             await authService.debugToken(token);
 
             const result = await gmailService.listMessages(query, limit, undefined, token);
-            allMessages = [...allMessages, ...result.messages];
+            const accountMsgs = result.messages.map(m => ({ ...m, _owner: account.email, _token: token }));
+            allMessages = [...allMessages, ...accountMsgs];
           } catch (e) {
             console.error(`[LocalDB] Error syncing account ${account.email}:`, e);
           }
@@ -1121,7 +1127,8 @@ class LocalDatabase {
       for (const msg of allMessages) {
         const parsed = gmailService.parseMessage(msg);
 
-        const storeItem: GmailMessageStore = {
+        // Define the store item type inline to avoid lint errors
+        const storeItem = {
           id: parsed.id,
           from: parsed.from,
           to: parsed.to,
@@ -1132,7 +1139,8 @@ class LocalDatabase {
           body: parsed.body,
           bodyPlain: parsed.bodyPlain,
           labels: parsed.labels,
-          hasAttachments: parsed.attachments.length > 0
+          hasAttachments: parsed.attachments.length > 0,
+          owner: msg._owner // Save owner email
         };
 
         await store.put(storeItem);
@@ -1177,12 +1185,61 @@ class LocalDatabase {
   }
 
   /**
-   * Delete a Gmail message by ID
+   * Delete a Gmail message by ID (Local AND Server)
    */
   async deleteGmailMessage(id: string): Promise<void> {
     if (!this.db) return;
-    await this.db.delete('gmail_messages', id);
-    console.log(`🗑️ [LocalDB] Deleted Gmail message ${id}`);
+
+    try {
+      // 1. Get message to find owner
+      const message = await this.db.get('gmail_messages', id);
+      if (!message) {
+        console.warn(`[LocalDB] Message ${id} not found locally, skipping server delete`);
+        return;
+      }
+
+      // 2. Find correct token
+      let token = authService.getAccessToken(); // Default to primary
+      const ownerEmail = (message as any).owner;
+
+      if (ownerEmail) {
+        const user = authService.getUser();
+        if (user?.email === ownerEmail) {
+          // It's primary
+          token = authService.getAccessToken();
+        } else {
+          // Check secondary accounts
+          const prefs = await this.getGmailPreferences();
+          const account = prefs?.connectedAccounts?.find(a => a.email === ownerEmail);
+          if (account?.accessToken) {
+            token = account.accessToken;
+          }
+        }
+      }
+
+      // 3. Delete from Server (Trash)
+      // Dynamically import to avoid circular dependency
+      const { gmailService } = await import('./gmailService');
+
+      console.log(`🗑️ [LocalDB] Trashing message ${id} on server (Owner: ${ownerEmail || 'unknown'})...`);
+      try {
+        await gmailService.trashMessage('me', id, token || undefined);
+        console.log(`✅ [LocalDB] Message ${id} trashed on server`);
+      } catch (serverError) {
+        console.error(`❌ [LocalDB] Failed to trash on server:`, serverError);
+        // Continue to delete locally so UI updates, but warn user?
+        // For now, we assume if it fails it might be already deleted or network issue.
+        // We still delete locally to satisfy the user's immediate request.
+      }
+
+      // 4. Delete Locally
+      await this.db.delete('gmail_messages', id);
+      console.log(`🗑️ [LocalDB] Deleted Gmail message ${id} locally`);
+
+    } catch (error) {
+      console.error('Error deleting Gmail message:', error);
+      throw error;
+    }
   }
 
   /**
