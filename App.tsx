@@ -47,6 +47,69 @@ const App: React.FC = () => {
   const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
 
 
+  // Navigation History State
+  const [history, setHistory] = useState<{ view: string, filter: NexusType | null, objectId: string | null }[]>([
+    { view: 'dashboard', filter: null, objectId: null }
+  ]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [isNavigatingHistory, setIsNavigatingHistory] = useState(false);
+
+  // Track history changes
+  useEffect(() => {
+    if (isNavigatingHistory) {
+      setIsNavigatingHistory(false);
+      return;
+    }
+
+    const current = history[historyIndex];
+    const newState = { view: currentView, filter: filterType, objectId: selectedObject?.id || null };
+
+    // Avoid pushing duplicate states if nothing changed
+    if (current && current.view === newState.view && current.filter === newState.filter && current.objectId === newState.objectId) {
+      return;
+    }
+
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newState);
+    // Limit history size if needed, e.g., 50 items
+    if (newHistory.length > 50) newHistory.shift();
+
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  }, [currentView, filterType, selectedObject]); // Dependencies
+
+  const goBack = () => {
+    if (historyIndex > 0) {
+      const prev = history[historyIndex - 1];
+      setIsNavigatingHistory(true);
+      setCurrentView(prev.view as any);
+      setFilterType(prev.filter);
+      if (prev.objectId) {
+        const obj = objects.find(o => o.id === prev.objectId);
+        setSelectedObject(obj || null);
+      } else {
+        setSelectedObject(null);
+      }
+      setHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  const goForward = () => {
+    if (historyIndex < history.length - 1) {
+      const next = history[historyIndex + 1];
+      setIsNavigatingHistory(true);
+      setCurrentView(next.view as any);
+      setFilterType(next.filter);
+      if (next.objectId) {
+        const obj = objects.find(o => o.id === next.objectId);
+        setSelectedObject(obj || null);
+      } else {
+        setSelectedObject(null);
+      }
+      setHistoryIndex(historyIndex + 1);
+    }
+  };
+
   // Language State
   const [lang, setLang] = useState<'en' | 'es'>(() => {
     if (typeof window !== 'undefined') {
@@ -282,7 +345,8 @@ const App: React.FC = () => {
     if (currentView === 'graph') return t.knowledgeGraph;
     if (currentView === 'tasks') return lang === 'es' ? 'Tareas' : 'Tasks';
     if (currentView === 'calendar') return t.calendar;
-    if (filterType) return filterType === NexusType.PAGE ? t.pages : filterType === NexusType.PERSON ? t.people : filterType === NexusType.MEETING ? t.meetings : t.projects;
+    if (currentView === 'documents' && !filterType) return lang === 'es' ? 'Documentos' : 'Documents';
+    if (filterType) return filterType === NexusType.PAGE ? t.pages : filterType === NexusType.PERSON ? t.people : filterType === NexusType.MEETING ? t.meetings : filterType;
     return 'All Objects';
   };
 
@@ -308,17 +372,43 @@ const App: React.FC = () => {
           <div className="flex-1 flex flex-col relative">
             {/* Top Header - Sticky */}
             <header className="sticky top-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors z-30">
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                {getHeaderTitle()}
-                {authService.isInDemoMode() && (
-                  <span className="text-xs font-medium px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-300 dark:border-amber-700 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              <div className="flex items-center gap-4">
+                {/* Navigation Buttons */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={goBack}
+                    disabled={historyIndex === 0}
+                    className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title={lang === 'es' ? 'Atrás' : 'Back'}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 18l-6-6 6-6" />
                     </svg>
-                    Demo Mode
-                  </span>
-                )}
-              </h2>
+                  </button>
+                  <button
+                    onClick={goForward}
+                    disabled={historyIndex === history.length - 1}
+                    className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title={lang === 'es' ? 'Adelante' : 'Forward'}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                </div>
+
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                  {getHeaderTitle()}
+                  {authService.isInDemoMode() && (
+                    <span className="text-xs font-medium px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-300 dark:border-amber-700 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Demo Mode
+                    </span>
+                  )}
+                </h2>
+              </div>
               <div className="flex gap-3 items-center">
                 <button
                   onClick={() => {

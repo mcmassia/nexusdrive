@@ -438,10 +438,17 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
 
                                     <div onClick={() => onSelectObject(obj)} className="cursor-pointer p-5 flex flex-col h-full">
                                         <div className="flex items-start justify-between mb-2 pl-6">
-                                            <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
+                                            <span
+                                                className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
+                                                style={{
+                                                    backgroundColor: availableTypes.find(t => t.type === obj.type)?.color ? `${availableTypes.find(t => t.type === obj.type)?.color}20` : '#f1f5f9',
+                                                    color: availableTypes.find(t => t.type === obj.type)?.color || '#64748b',
+                                                    borderColor: availableTypes.find(t => t.type === obj.type)?.color ? `${availableTypes.find(t => t.type === obj.type)?.color}40` : '#e2e8f0'
+                                                }}
+                                            >
                                                 {obj.type}
                                             </span>
-                                            <div style={{ color: TYPE_CONFIG[obj.type as NexusType]?.color || '#999' }}>
+                                            <div style={{ color: availableTypes.find(t => t.type === obj.type)?.color || '#999' }}>
                                                 <div className="w-3 h-3 rounded-full bg-current" />
                                             </div>
                                         </div>
