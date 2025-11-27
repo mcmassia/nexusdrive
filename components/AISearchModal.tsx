@@ -99,14 +99,30 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
       if (!obj) {
         try {
           obj = await db.getObjectById(objectId) || undefined;
+
+          // If still not found, check if it's an email
+          if (!obj) {
+            const email = await db.getGmailMessageById(objectId);
+            if (email) {
+              // Open email in Gmail
+              const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${objectId}`;
+              window.open(gmailUrl, '_blank');
+              return;
+            }
+          }
         } catch (err) {
           console.error("Error fetching object:", err);
         }
       }
 
       if (obj) {
-        onNavigate(obj);
-        onClose();
+        if (obj.type === 'Email') {
+          const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${obj.id}`;
+          window.open(gmailUrl, '_blank');
+        } else {
+          onNavigate(obj);
+          onClose();
+        }
       } else {
         console.warn(`Object with ID ${objectId} not found.`);
         // Optional: Show a toast or alert
@@ -122,6 +138,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
       case 'Person': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
       case 'Meeting': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
       case 'Project': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+      case 'Email': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
       default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
   };
@@ -206,8 +223,13 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                       <button
                         key={obj.id}
                         onClick={() => {
-                          onNavigate(obj);
-                          onClose();
+                          if (obj.type === 'Email') {
+                            const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${obj.id}`;
+                            window.open(gmailUrl, '_blank');
+                          } else {
+                            onNavigate(obj);
+                            onClose();
+                          }
                         }}
                         className="text-left bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group flex flex-col gap-2"
                       >
@@ -285,8 +307,13 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                         <button
                           key={obj.id}
                           onClick={() => {
-                            onNavigate(obj);
-                            onClose();
+                            if (obj.type === 'Email') {
+                              const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${obj.id}`;
+                              window.open(gmailUrl, '_blank');
+                            } else {
+                              onNavigate(obj);
+                              onClose();
+                            }
                           }}
                           className="text-left bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group flex flex-col gap-2"
                         >

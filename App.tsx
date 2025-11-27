@@ -9,6 +9,7 @@ import TagsManager from './components/TagsManager';
 import AISearchModal from './components/AISearchModal';
 import CalendarView from './components/CalendarView';
 import TasksView from './components/TasksView';
+import SettingsView from './components/SettingsView';
 import LoginScreen from './components/LoginScreen';
 import RightPanel from './components/RightPanel';
 import { NexusObject, NexusType, GraphNode, GraphLink, UserProfile, TypeSchema, NexusProperty } from './types';
@@ -21,6 +22,17 @@ import { NotificationProvider } from './components/NotificationContext';
 import { NotificationUI } from './components/NotificationUI';
 import { GlobalErrorHandler } from './components/GlobalErrorHandler';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+// Development helper: Expose db and gmailService to window for console testing
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).db = db;
+  (window as any).authService = authService;
+  import('./services/gmailService').then(module => {
+    (window as any).gmailService = module.gmailService;
+  });
+  console.log('🔧 [Dev] db, authService, and gmailService exposed to window for console testing');
+}
+
 
 const App: React.FC = () => {
   // Auth State
@@ -86,14 +98,57 @@ const App: React.FC = () => {
           setSyncing(false);
         }
       } else if (newUser) {
-        // Demo mode - just load local data
-        await loadData();
+        // Demo mode or just logged in locally
+        loadData();
       }
     };
 
     window.addEventListener('nexus-auth-change', handleAuthChange);
     return () => window.removeEventListener('nexus-auth-change', handleAuthChange);
   }, []);
+
+  // Background Sync Effect
+  useEffect(() => {
+    let syncInterval: NodeJS.Timeout;
+
+    const setupBackgroundSync = async () => {
+      const prefs = await db.getGmailPreferences();
+
+      if (prefs && prefs.autoSync) {
+        const frequencyMinutes = prefs.syncFrequency || 60;
+        const frequencyMs = frequencyMinutes * 60 * 1000;
+
+        console.log(`[App] Setting up background sync every ${frequencyMinutes} minutes`);
+
+        // Initial sync check (if needed)
+        // We could check lastSyncTime here, but for now let's just rely on the interval
+        // or maybe run one immediately if it's been too long?
+
+        syncInterval = setInterval(async () => {
+          console.log('[App] Running background Gmail sync...');
+          try {
+            await db.syncGmailMessages();
+            // Optional: Refresh UI if needed, but db updates should trigger re-renders if using live queries
+            // For now, we might want to reload emails if the user is on the dashboard
+            if (currentView === 'dashboard') {
+              // We can't easily force reload the EmailsPanel from here without context/events
+              // But the next user interaction or auto-refresh in panel will pick it up
+            }
+          } catch (err) {
+            console.error('[App] Background sync failed:', err);
+          }
+        }, frequencyMs);
+      }
+    };
+
+    if (user && !authService.isInDemoMode()) {
+      setupBackgroundSync();
+    }
+
+    return () => {
+      if (syncInterval) clearInterval(syncInterval);
+    };
+  }, [user, currentView]); // Re-run if user changes. currentView added to potentially refresh if needed, though maybe not strictly necessary for the interval setup itself.
 
   // Handle Dark Mode Class
   useEffect(() => {
@@ -237,7 +292,7 @@ const App: React.FC = () => {
       <NotificationProvider>
         <GlobalErrorHandler />
         <NotificationUI />
-        <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
+        <div className="flex h-screen w-full bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
           <Sidebar
             currentView={currentView}
             onViewChange={setCurrentView}
@@ -355,7 +410,7 @@ const App: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
                     {user.picture ? (
-                      <img src={user.picture} alt="User" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" />
+                      <img src={user.picture} alt="User" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
                         {user?.name?.charAt(0).toUpperCase() || 'U'}
@@ -424,7 +479,7 @@ const App: React.FC = () => {
             {/* Main Workspace */}
             <main className="flex-1 overflow-hidden relative p-0 bg-slate-100 dark:bg-black/20 flex">
 
-              <div className="flex-1 relative">
+              <div className="flex-1 w-0 relative min-w-0 overflow-hidden">
                 {currentView === 'dashboard' && (
                   <Dashboard onNavigate={setSelectedObject} lang={lang} objects={objects} />
                 )}
@@ -442,7 +497,7 @@ const App: React.FC = () => {
 
                 {
                   currentView === 'settings' && (
-                    <TypeManager />
+                    <SettingsView lang={lang} />
                   )
                 }
 

@@ -1,4 +1,4 @@
-import { UserProfile } from '../types';
+import { UserProfile, ConnectedAccount } from '../types';
 
 declare global {
   interface Window {
@@ -8,7 +8,7 @@ declare global {
 
 // CLIENT_ID from environment variables (Vite uses import.meta.env)
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const SCOPES = 'openid profile email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar';
+const SCOPES = 'openid profile email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.metadata';
 const FORCE_DEMO = import.meta.env.VITE_DEMO_MODE === 'true';
 
 class AuthService {
@@ -116,18 +116,29 @@ class AuthService {
   logout() {
     this.user = null;
     const token = localStorage.getItem('nexus_token');
+
     // Revoke token if it was a real one
     if (token && token !== 'mock_token' && window.google) {
       try {
+        console.log('🔓 [Auth] Revoking OAuth token...');
         window.google.accounts.oauth2.revoke(token, () => {
-          console.log('Token revoked');
+          console.log('✅ [Auth] Token revoked successfully');
         });
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error('❌ [Auth] Failed to revoke token:', e);
+      }
     }
 
+    // Clear all auth data
     localStorage.removeItem('nexus_token');
     localStorage.removeItem('nexus_user');
-    window.location.reload();
+
+    console.log('🔄 [Auth] Reloading page to complete logout...');
+
+    // Force reload after small delay to ensure revocation completes
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   }
 
   // Fetch user info from Google People API or Oauth2 info
@@ -241,6 +252,197 @@ class AuthService {
       this.tokenClient.requestAccessToken({ prompt: '' }); // Try silent refresh first
     });
   }
+
+  /**
+   * Force complete re-authentication (useful when scopes change)
+   * This revokes the current token and forces a new consent screen
+   */
+  forceReauth() {
+    console.log('🔄 [Auth] Forcing complete re-authentication...');
+
+    const token = localStorage.getItem('nexus_token');
+    if (token && token !== 'mock_token' && window.google) {
+      try {
+        // Revoke existing token
+        window.google.accounts.oauth2.revoke(token, () => {
+          console.log('✅ [Auth] Token revoked');
+        });
+      } catch (e) {
+        console.error('❌ [Auth] Revoke failed:', e);
+      }
+    }
+
+    // Clear all local data
+    localStorage.removeItem('nexus_token');
+    localStorage.removeItem('nexus_user');
+    this.user = null;
+
+    // Wait a bit for revocation to complete, then trigger new login
+    setTimeout(() => {
+      console.log('🔐 [Auth] Requesting new authentication with updated scopes...');
+      if (this.tokenClient) {
+        // Force consent screen with prompt: 'consent'
+        this.tokenClient.requestAccessToken({
+          prompt: 'consent' // Force consent screen even if previously granted
+        });
+      } else {
+        console.error('❌ [Auth] TokenClient not available');
+        window.location.reload();
+      }
+    }, 1000);
+  }
+
+  /**
+   * Debug: Check what scopes the current token has
+   */
+  async debugToken(tokenToCheck?: string): Promise<void> {
+    const token = tokenToCheck || localStorage.getItem('nexus_token');
+    if (!token || token === 'mock_token') {
+      console.log('❌ No valid token found');
+      return;
+    }
+
+    try {
+      console.log('🔍 [Auth] Checking token scopes...');
+      const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`);
+      const data = await response.json();
+
+      console.log('✅ [Auth] Token info:');
+      console.log('  Email:', data.email);
+      console.log('  Expires in:', data.expires_in, 'seconds');
+      console.log('  Scopes granted:');
+
+      const scopes = data.scope.split(' ');
+      scopes.forEach((scope: string) => {
+        const hasGmail = scope.includes('gmail');
+        console.log(`    ${hasGmail ? '✅' : '  '} ${scope}`);
+      });
+
+      // Check specifically for Gmail scopes
+      const hasGmailReadonly = scopes.some((s: string) => s.includes('gmail.readonly'));
+      const hasGmailModify = scopes.some((s: string) => s.includes('gmail.modify'));
+      const hasGmailMetadata = scopes.some((s: string) => s.includes('gmail.metadata'));
+
+      console.log('\n📧 Gmail scopes status:');
+      console.log('  gmail.readonly:', hasGmailReadonly ? '✅ GRANTED' : '❌ MISSING');
+      console.log('  gmail.modify:', hasGmailModify ? '✅ GRANTED' : '❌ MISSING');
+      console.log('  gmail.metadata:', hasGmailMetadata ? '✅ GRANTED' : '❌ MISSING');
+
+      if (!hasGmailReadonly && !hasGmailModify && !hasGmailMetadata) {
+        console.error('\n❌ NO GMAIL SCOPES FOUND!');
+        console.error('The token does not have Gmail permissions.');
+        console.error('This means the OAuth consent screen is NOT showing Gmail scopes.');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ [Auth] Failed to check token:', error);
+    }
+  }
+  /**
+   * Add a secondary Google account
+   * Triggers OAuth flow with prompt='select_account'
+   * Returns the new account details without logging out the current user
+   */
+  async addAccount(): Promise<ConnectedAccount | null> {
+    return new Promise((resolve) => {
+      if (this.isDemoMode) {
+        // Return a mock secondary account
+        resolve({
+          email: 'secondary.demo@example.com',
+          name: 'Secondary Demo User',
+          picture: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+          accessToken: 'mock_secondary_token'
+        });
+        return;
+      }
+
+      if (!this.tokenClient) {
+        if (window.google) {
+          this.initializeTokenClient();
+        } else {
+          console.error('❌ [Auth] Google scripts not loaded');
+          resolve(null);
+          return;
+        }
+      }
+
+      if (!this.tokenClient) {
+        console.error('❌ [Auth] Failed to initialize token client');
+        resolve(null);
+        return;
+      }
+
+      // Save original callback
+      const originalCallback = this.tokenClient.callback;
+
+      // Set temporary callback for this specific request
+      this.tokenClient.callback = async (response: any) => {
+        // Restore original callback
+        this.tokenClient.callback = originalCallback;
+
+        if (response && response.access_token) {
+          console.log('✅ [Auth] Secondary account token received');
+
+          // Verify scopes
+          const hasScopes = await this.verifyScopes(response.access_token);
+          if (!hasScopes) {
+            alert('Error: Debes conceder permisos de lectura de Gmail para conectar la cuenta.');
+            resolve(null);
+            return;
+          }
+
+          try {
+            // Fetch profile for this new token
+            const profileResp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${response.access_token}` },
+            });
+
+            if (profileResp.ok) {
+              const data = await profileResp.json();
+              const newAccount: ConnectedAccount = {
+                name: data.name,
+                email: data.email,
+                picture: data.picture,
+                accessToken: response.access_token
+              };
+              resolve(newAccount);
+            } else {
+              console.error('❌ [Auth] Failed to fetch profile for new account');
+              resolve(null);
+            }
+          } catch (error) {
+            console.error('❌ [Auth] Error fetching secondary profile:', error);
+            resolve(null);
+          }
+        } else {
+          console.error('❌ [Auth] No token received for secondary account');
+          resolve(null);
+        }
+      };
+
+      // Request token with select_account and consent prompt
+      console.log('➕ [Auth] Requesting add account...');
+      this.tokenClient.requestAccessToken({
+        prompt: 'select_account consent',
+        scope: SCOPES
+      });
+    });
+  }
+
+  private async verifyScopes(accessToken: string): Promise<boolean> {
+    try {
+      const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+      if (!response.ok) return false;
+
+      const data = await response.json();
+      const scopes = data.scope.split(' ');
+      return scopes.some((s: string) => s.includes('gmail.readonly'));
+    } catch {
+      return false;
+    }
+  }
 }
+
 
 export const authService = new AuthService();

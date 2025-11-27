@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
-import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig } from '../types';
+import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig, EmailData, GmailPreferences } from '../types';
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
@@ -36,6 +36,27 @@ interface NexusDB extends DBSchema {
     key: string;
     value: { id: string; calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] };
   };
+  gmail_messages: {
+    key: string; // message ID
+    value: {
+      id: string;
+      from: string;
+      to: string;
+      cc?: string;
+      subject: string;
+      date: Date;
+      snippet: string;
+      body: string; // HTML or plain text body
+      bodyPlain: string;
+      hasAttachments: boolean;
+      labels: string[];
+    };
+    indexes: { 'by-date': Date; 'by-sender': string };
+  };
+  gmail_preferences: {
+    key: string; // 'default'
+    value: GmailPreferences;
+  };
 }
 
 /**
@@ -64,7 +85,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 6, {
+      this.db = await openDB<NexusDB>('nexus-db', 7, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -111,6 +132,18 @@ class LocalDatabase {
           }
           if (!db.objectStoreNames.contains('calendar_preferences')) {
             db.createObjectStore('calendar_preferences', { keyPath: 'id' });
+          }
+
+          // NEW in v2.3: Gmail stores
+          if (!db.objectStoreNames.contains('gmail_messages')) {
+            const gmailStore = db.createObjectStore('gmail_messages', { keyPath: 'id' });
+            gmailStore.createIndex('by-date', 'date');
+            gmailStore.createIndex('by-sender', 'from');
+            console.log('[LocalDB] Created gmail_messages store');
+          }
+          if (!db.objectStoreNames.contains('gmail_preferences')) {
+            db.createObjectStore('gmail_preferences', { keyPath: 'id' });
+            console.log('[LocalDB] Created gmail_preferences store');
           }
         },
       });
@@ -655,12 +688,29 @@ class LocalDatabase {
    */
   async vectorSearch(query: string): Promise<NexusObject[]> {
     const objects = await this.getObjects();
+    const emails = await this.getGmailMessages(100); // Limit to recent emails for performance
+
+    // Map emails to NexusObject structure
+    const emailObjects: NexusObject[] = emails.map(email => ({
+      id: email.id,
+      title: email.subject || 'No Subject',
+      type: NexusType.EMAIL,
+      content: email.bodyPlain || email.snippet || '',
+      lastModified: email.date,
+      tags: ['email'],
+      metadata: [
+        { key: 'from', label: 'From', value: email.from, type: 'text' },
+        { key: 'to', label: 'To', value: email.to, type: 'text' }
+      ]
+    }));
+
+    const allItems = [...objects, ...emailObjects];
 
     // Normalize query: remove accents/diacritics and lowercase
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const normalizedQuery = normalize(query);
 
-    return objects.filter(obj => {
+    return allItems.filter(obj => {
       const title = normalize(obj.title);
       const content = normalize(obj.content);
       // Check title, content, and tags
@@ -1007,6 +1057,228 @@ class LocalDatabase {
     }
 
     console.log('[LocalDB] Initialized default type schemas');
+  }
+
+  /**
+   * GMAIL METHODS
+   */
+
+  /**
+   * Sync Gmail messages from Gmail API to local IndexedDB
+   */
+  async syncGmailMessages(): Promise<void> {
+    if (!this.db || authService.isInDemoMode()) {
+      console.log('[LocalDB] Skipping Gmail sync (demo mode or no DB)');
+      return;
+    }
+
+    try {
+      console.log('📧 [LocalDB] Syncing Gmail messages...');
+
+      // Dynamically import gmailService to avoid circular dependency
+      const { gmailService } = await import('./gmailService');
+
+      // Get preferences for query and connected accounts
+      const prefs = await this.getGmailPreferences();
+      const query = prefs?.syncQuery || '';
+      const limit = 20; // Sync last 20 messages per account
+
+      // 1. Fetch from Primary Account
+      let allMessages: any[] = [];
+      try {
+        const primaryResult = await gmailService.listMessages(query, limit);
+        allMessages = [...primaryResult.messages];
+      } catch (e) {
+        console.error('[LocalDB] Error syncing primary account:', e);
+      }
+
+      // 2. Fetch from Connected Accounts
+      if (prefs?.connectedAccounts) {
+        for (const account of prefs.connectedAccounts) {
+          try {
+            console.log(`[LocalDB] Syncing secondary account: ${account.email}`);
+            const token = account.accessToken?.trim();
+
+            // Debug scopes for this account
+            await authService.debugToken(token);
+
+            const result = await gmailService.listMessages(query, limit, undefined, token);
+            allMessages = [...allMessages, ...result.messages];
+          } catch (e) {
+            console.error(`[LocalDB] Error syncing account ${account.email}:`, e);
+          }
+        }
+      }
+
+      if (allMessages.length === 0) {
+        console.log('[LocalDB] No messages found to sync');
+        return;
+      }
+
+      const tx = this.db.transaction('gmail_messages', 'readwrite');
+      const store = tx.objectStore('gmail_messages');
+
+      for (const msg of allMessages) {
+        const parsed = gmailService.parseMessage(msg);
+
+        const storeItem: GmailMessageStore = {
+          id: parsed.id,
+          from: parsed.from,
+          to: parsed.to,
+          cc: parsed.cc,
+          subject: parsed.subject,
+          date: parsed.date,
+          snippet: parsed.snippet,
+          body: parsed.body,
+          bodyPlain: parsed.bodyPlain,
+          labels: parsed.labels,
+          hasAttachments: parsed.attachments.length > 0
+        };
+
+        await store.put(storeItem);
+      }
+      await tx.done;
+      console.log(`[LocalDB] Synced ${allMessages.length} messages total`);
+    } catch (error) {
+      console.error('Error syncing Gmail messages:', error);
+    }
+  }
+
+  /**
+   * Get Gmail messages from local cache
+   */
+  async getGmailMessages(limit: number = 10): Promise<any[]> {
+    if (!this.db) return [];
+
+    try {
+      const messages = await this.db.getAll('gmail_messages');
+      return messages
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, limit);
+    } catch (error) {
+      console.error('[LocalDB] Failed to get Gmail messages:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single Gmail message by ID
+   */
+  async getGmailMessageById(messageId: string): Promise<any | null> {
+    if (!this.db) return null;
+
+    try {
+      const message = await this.db.get('gmail_messages', messageId);
+      return message || null;
+    } catch (error) {
+      console.error('[LocalDB] Failed to get Gmail message:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Delete a Gmail message by ID
+   */
+  async deleteGmailMessage(id: string): Promise<void> {
+    if (!this.db) return;
+    await this.db.delete('gmail_messages', id);
+    console.log(`🗑️ [LocalDB] Deleted Gmail message ${id}`);
+  }
+
+  /**
+   * Get Gmail preferences
+   */
+  async getGmailPreferences(): Promise<GmailPreferences | null> {
+    if (!this.db) {
+      return {
+        id: 'default',
+        selectedAccounts: [],
+        syncQuery: '', // Empty query to avoid 403 errors
+        lastSyncTime: undefined
+      };
+    }
+
+    try {
+      const prefs = await this.db.get('gmail_preferences', 'default');
+      return prefs || {
+        id: 'default',
+        selectedAccounts: [],
+        syncQuery: '', // Empty query to avoid 403 errors
+        lastSyncTime: undefined
+      };
+    } catch (error) {
+      console.error('[LocalDB] Failed to get Gmail preferences:', error);
+      return {
+        id: 'default',
+        selectedAccounts: [],
+        syncQuery: '', // Empty query to avoid 403 errors
+        lastSyncTime: undefined
+      };
+    }
+  }
+
+  /**
+   * Save Gmail preferences
+   */
+  async saveGmailPreferences(prefs: GmailPreferences): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      await this.db.put('gmail_preferences', { ...prefs, id: 'default' });
+      console.log('[LocalDB] Saved Gmail preferences');
+    } catch (error) {
+      console.error('[LocalDB] Failed to save Gmail preferences:', error);
+    }
+  }
+
+  async createDocumentFromEmail(emailId: string, type: string): Promise<string> {
+    const message = await this.getGmailMessageById(emailId);
+    if (!message) throw new Error('Email not found');
+
+    const now = new Date();
+
+    const docId = crypto.randomUUID();
+
+    // Extract content from the stored message object
+    const subject = message.subject || 'Untitled Email';
+    const from = message.from || 'Unknown';
+    const date = message.date ? new Date(message.date).toLocaleString() : '';
+
+    // Use the passed type directly as NexusType (casting as it can be a custom string)
+    const nexusType = type as NexusType;
+
+    // Create HTML content
+    let htmlContent = `<h1>${subject}</h1>`;
+    htmlContent += `<p style="color: gray;">From: ${from} | Date: ${date}</p>`;
+    htmlContent += `<hr />`;
+
+    // Add email content
+    // Prefer HTML body if available and safe, otherwise plain text
+    if (message.body) {
+      htmlContent += message.body;
+    } else if (message.bodyPlain) {
+      const paragraphs = message.bodyPlain.split(/\n\s*\n/);
+      paragraphs.forEach((p: string) => {
+        if (p.trim()) {
+          htmlContent += `<p>${p.trim()}</p>`;
+        }
+      });
+    } else {
+      htmlContent += `<p>${message.snippet || 'No content'}</p>`;
+    }
+
+    const newDoc: NexusObject = {
+      id: docId,
+      title: subject,
+      type: nexusType,
+      content: htmlContent,
+      lastModified: now,
+      tags: ['email-import'],
+      metadata: []
+    };
+
+    await this.saveObject(newDoc);
+    return docId;
   }
 }
 

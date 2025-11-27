@@ -5,7 +5,8 @@ export enum NexusType {
   PERSON = 'Person',
   MEETING = 'Meeting',
   PROJECT = 'Project',
-  NOTE = 'Note'
+  NOTE = 'Note',
+  EMAIL = 'Email'
 }
 
 export interface NexusProperty {
@@ -112,4 +113,78 @@ export interface UserProfile {
   email: string;
   picture: string;
   accessToken?: string;
+}
+
+// Gmail API Types
+export interface GmailMessage {
+  id: string;
+  threadId: string;
+  labelIds: string[];
+  snippet: string;
+  payload: {
+    headers: Array<{ name: string; value: string }>;
+    body?: {
+      size: number;
+      data?: string;
+    };
+    parts?: Array<{
+      partId: string;
+      mimeType: string;
+      filename: string;
+      headers: Array<{ name: string; value: string }>;
+      body: {
+        size: number;
+        attachmentId?: string;
+        data?: string;
+      };
+      parts?: any[];
+    }>;
+    mimeType: string;
+  };
+  sizeEstimate: number;
+  internalDate: string;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  size: number;
+  attachmentId: string;
+}
+
+export interface EmailData {
+  id: string;
+  threadId: string;
+  from: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  date: Date;
+  body: string;
+  bodyPlain: string;
+  snippet: string;
+  attachments: EmailAttachment[];
+  labels: string[];
+}
+
+export interface ConnectedAccount {
+  email: string;
+  name: string;
+  picture: string;
+  accessToken: string;
+  lastSync?: Date;
+}
+
+export interface GmailPreferences {
+  id: string;
+  selectedAccounts: string[]; // Legacy, kept for compatibility
+  connectedAccounts?: ConnectedAccount[]; // New multi-account support
+  syncQuery: string;
+  lastSyncTime?: Date;
+  // Advanced Config
+  syncLabels?: string[]; // e.g., ['INBOX', 'IMPORTANT']
+  syncFrequency?: number; // in minutes
+  autoSync?: boolean;
+  filterSender?: string;
+  filterAfterDate?: Date;
 }
