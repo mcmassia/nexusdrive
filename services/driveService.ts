@@ -233,7 +233,7 @@ class DriveService {
             }
         };
 
-        const content = fullHtmlContent; // Use the full HTML content for the body
+        const content = await this.processContentForDrive(fullHtmlContent); // Process content to resolve links
         const boundary = '-------314159265358979323846';
         const delimiter = `\r\n--${boundary}\r\n`;
         const closeDelim = `\r\n--${boundary}--`;
@@ -344,7 +344,7 @@ class DriveService {
 
                 if (obj?.driveFileId) {
                     const url = `https://docs.google.com/document/d/${obj.driveFileId}/edit`;
-                    links.push(`<a href="${url}" data-nexus-id="${id}" style="color: #1a73e8; text-decoration: none;">${obj.title}</a>`);
+                    links.push(`<a href="${url}" data-object-id="${id}" style="color: #1a73e8; text-decoration: none;">${obj.title}</a>`);
                 } else if (obj) {
                     // Object exists but no Drive file yet - show title with ID
                     links.push(`${obj.title} <span style="color: #999; font-size: 8pt;">(not synced)</span>`);
@@ -524,7 +524,7 @@ class DriveService {
             JSON.stringify(metadata) +
             delimiter +
             'Content-Type: text/html\r\n\r\n' +
-            fullHtmlContent +
+            await this.processContentForDrive(fullHtmlContent) +
             close_delim;
 
         await this.fetchWithAuth(
@@ -657,6 +657,53 @@ class DriveService {
             console.error(`[DriveService] Failed to get file info:`, error);
             return null;
         }
+    }
+    /**
+     * Process content for Drive: Replace internal links with Drive links
+     */
+    private async processContentForDrive(content: string): Promise<string> {
+        if (!content) return '';
+
+        // Dynamically import db to avoid circular dependency
+        const { db } = await import('./db');
+
+        // Regex to find anchor tags with data-object-id (Nexus standard)
+        // We assume internal links look like <a ... data-object-id="123" ...>
+
+        if (typeof window === 'undefined') {
+            return content; // Fallback for non-browser environments
+        }
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        const links = doc.querySelectorAll('a');
+
+        // We need to process links sequentially to await DB lookups
+        for (const link of Array.from(links)) {
+            const nexusId = link.getAttribute('data-object-id') || link.getAttribute('data-nexus-id'); // Support both just in case
+
+            if (nexusId) {
+                try {
+                    const targetObj = await db.getObjectById(nexusId);
+                    if (targetObj && targetObj.driveFileId) {
+                        // Replace href with Drive link
+                        link.setAttribute('href', `https://docs.google.com/document/d/${targetObj.driveFileId}/edit`);
+                        // Optional: Add styling to indicate it's a Drive link
+                        link.style.color = '#1a73e8';
+                        link.style.textDecoration = 'none';
+                    } else {
+                        // Object exists but not synced, or not found
+                        // Keep it as is, or maybe mark it
+                        link.style.color = '#5f6368'; // Grey out if not available
+                        link.removeAttribute('href'); // Remove href to prevent 404s if it was internal
+                    }
+                } catch (e) {
+                    console.warn(`[DriveService] Failed to resolve link for ${nexusId}`, e);
+                }
+            }
+        }
+
+        return doc.body.innerHTML;
     }
 }
 
