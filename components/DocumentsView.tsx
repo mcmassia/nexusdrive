@@ -8,7 +8,7 @@ interface DocumentsViewProps {
     objects: NexusObject[];
     onSelectObject: (obj: NexusObject) => void;
     onRefresh?: () => void;
-    initialTypeFilter?: string | null;
+    activeTypeFilter?: string | null;
     lang: 'en' | 'es';
     availableTypes: TypeSchema[];
 }
@@ -18,10 +18,10 @@ type ViewMode = 'table' | 'cards';
 
 import { TypeSchema } from '../types';
 
-const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, onRefresh, initialTypeFilter, lang, availableTypes }) => {
+const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, onRefresh, activeTypeFilter, lang, availableTypes }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState<NexusType | 'all'>(
-        (initialTypeFilter as NexusType) || 'all'
+        (activeTypeFilter as NexusType) || 'all'
     );
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [sortBy, setSortBy] = useState<SortOption>('date-desc');
@@ -29,6 +29,15 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Update selectedType when activeTypeFilter prop changes
+    React.useEffect(() => {
+        if (activeTypeFilter) {
+            setSelectedType(activeTypeFilter as NexusType);
+        } else {
+            setSelectedType('all');
+        }
+    }, [activeTypeFilter]);
 
     // Get all unique tags from all objects
     const allTags = useMemo(() => {

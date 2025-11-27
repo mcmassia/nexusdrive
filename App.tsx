@@ -75,7 +75,6 @@ const App: React.FC = () => {
   const [objects, setObjects] = useState<NexusObject[]>([]);
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[], links: GraphLink[] }>({ nodes: [], links: [] });
   const [syncing, setSyncing] = useState(false);
-  const [documentsTypeFilter, setDocumentsTypeFilter] = useState<string | null>(null);
   const [availableTypes, setAvailableTypes] = useState<TypeSchema[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -541,7 +540,7 @@ const App: React.FC = () => {
                       objects={objects}
                       onSelectObject={(obj) => setSelectedObject(obj)}
                       onRefresh={loadData}
-                      initialTypeFilter={documentsTypeFilter}
+                      activeTypeFilter={filterType}
                       lang={lang}
                       availableTypes={availableTypes}
                     />
@@ -600,10 +599,10 @@ const App: React.FC = () => {
                       }}
                       onClose={() => setSelectedObject(null)}
                       lang={lang}
-                      onNavigateToDocuments={(filterType) => {
+                      onNavigateToDocuments={(type) => {
                         // Navigate to Documents view with type filter
                         setCurrentView('documents');
-                        setDocumentsTypeFilter(filterType || null);
+                        setFilterType(type as NexusType || null);
                         setSelectedObject(null);
                       }}
                       onTagClick={handleTagClick}

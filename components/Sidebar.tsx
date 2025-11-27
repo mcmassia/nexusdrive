@@ -106,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onTypeFilt
           return (
             <button
               key={type}
-              onClick={() => { onViewChange('list'); onTypeFilter(type); onObjectSelect(null); }}
+              onClick={() => { onViewChange('documents'); onTypeFilter(type); onObjectSelect(null); }}
               className={navItemClass(type.toLowerCase())}
               title={type}
             >
