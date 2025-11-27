@@ -686,16 +686,28 @@ class LocalDatabase {
   /**
    * Vector search (simulated for now)
    */
+  /**
+   * Vector search (simulated for now)
+   * Improved to use keyword matching instead of strict substring
+   */
   async vectorSearch(query: string): Promise<NexusObject[]> {
     const objects = await this.getObjects();
-    const emails = await this.getGmailMessages(100); // Limit to recent emails for performance
+    const emails = await this.getGmailMessages(500); // Increased limit for better recall
 
     // Map emails to NexusObject structure
     const emailObjects: NexusObject[] = emails.map(email => ({
       id: email.id,
       title: email.subject || 'No Subject',
       type: NexusType.EMAIL,
-      content: email.bodyPlain || email.snippet || '',
+      // Combine body, snippet, subject, and sender/recipient for better recall
+      // This ensures we find emails even if body is empty or we only remember the sender
+      content: [
+        email.subject,
+        email.from,
+        email.to,
+        email.snippet,
+        email.bodyPlain
+      ].filter(Boolean).join(' '),
       lastModified: email.date,
       tags: ['email'],
       metadata: [
@@ -710,14 +722,76 @@ class LocalDatabase {
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const normalizedQuery = normalize(query);
 
-    return allItems.filter(obj => {
+    // Stop words (English & Spanish)
+    const STOP_WORDS = new Set([
+      // Spanish
+      'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'pero', 'por', 'para', 'con', 'de', 'del', 'al',
+      'que', 'quien', 'cual', 'como', 'donde', 'cuando', 'es', 'son', 'fue', 'fueron', 'ser', 'estar', 'tener', 'hacer',
+      'informacion', 'sobre', 'este', 'esta', 'estos', 'estas', 'todo', 'toda', 'todos', 'todas', 'hay', 'mis', 'tus', 'sus',
+      'tenemos', 'tengo', 'tienes', 'tiene', 'tienen', 'hago', 'haces', 'hace', 'hacemos', 'hacen',
+      // English
+      'the', 'a', 'an', 'and', 'or', 'but', 'for', 'of', 'in', 'on', 'at', 'to', 'from', 'by', 'with', 'about',
+      'what', 'who', 'which', 'how', 'where', 'when', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+      'do', 'does', 'did', 'this', 'that', 'these', 'those', 'all', 'any', 'some', 'info', 'information',
+      'we', 'you', 'i', 'my', 'your', 'our'
+    ]);
+
+    // Split query into terms and filter out stop words and short words
+    const terms = normalizedQuery.split(/\s+/).filter(t => t.length > 2 && !STOP_WORDS.has(t));
+
+    // If all terms were stop words (e.g. "que es la..."), fall back to original terms to return something
+    const searchTerms = terms.length > 0 ? terms : normalizedQuery.split(/\s+/).filter(t => t.length > 2);
+
+    if (searchTerms.length === 0) return [];
+
+    // Score items based on term matches
+    const scoredItems = allItems.map(obj => {
+      let score = 0;
+      let matches = 0;
       const title = normalize(obj.title);
       const content = normalize(obj.content);
-      // Check title, content, and tags
-      return title.includes(normalizedQuery) ||
-        content.includes(normalizedQuery) ||
-        obj.tags?.some(t => normalize(t).includes(normalizedQuery));
+      const tags = obj.tags?.map(t => normalize(t)) || [];
+
+      searchTerms.forEach(term => {
+        let termMatched = false;
+
+        // Title match
+        if (title.includes(term)) {
+          score += 10;
+          termMatched = true;
+        }
+
+        // Content match (increased weight)
+        if (content.includes(term)) {
+          score += 5; // Was 1, increased to 5 to make content matches more significant
+          termMatched = true;
+        }
+
+        // Tag match
+        if (tags.some(t => t.includes(term))) {
+          score += 8;
+          termMatched = true;
+        }
+
+        if (termMatched) matches++;
+      });
+
+      // Bonus for matching multiple terms
+      if (matches > 0) {
+        const matchPercentage = matches / searchTerms.length;
+        if (matchPercentage === 1) score += 50; // Perfect match bonus
+        else if (matchPercentage >= 0.5) score += 20; // Good match bonus
+      }
+
+      return { obj, score };
     });
+
+    // Filter by score > 0 and sort by score desc
+    return scoredItems
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.obj)
+      .slice(0, 20); // Return top 20 relevant results
   }
 
   // Dashboard methods
