@@ -234,6 +234,9 @@ class DriveService {
         };
 
         const content = await this.processContentForDrive(fullHtmlContent); // Process content to resolve links
+        const backmatter = await this.buildBackmatter(obj); // Build backlinks section
+        const finalContent = content + backmatter;
+
         const boundary = '-------314159265358979323846';
         const delimiter = `\r\n--${boundary}\r\n`;
         const closeDelim = `\r\n--${boundary}--`;
@@ -245,7 +248,7 @@ class DriveService {
             delimiter +
             'Content-Type: text/html; charset=UTF-8\r\n' +
             'Content-Transfer-Encoding: base64\r\n\r\n' +
-            unicodeToBase64(content) +
+            unicodeToBase64(finalContent) +
             closeDelim;
 
         const response = await this.fetchWithAuth(
@@ -525,6 +528,7 @@ class DriveService {
             delimiter +
             'Content-Type: text/html\r\n\r\n' +
             await this.processContentForDrive(fullHtmlContent) +
+            await this.buildBackmatter(obj) +
             close_delim;
 
         await this.fetchWithAuth(
@@ -704,6 +708,53 @@ class DriveService {
         }
 
         return doc.body.innerHTML;
+    }
+
+    /**
+     * Build backmatter with Linked References (Backlinks)
+     */
+    private async buildBackmatter(obj: NexusObject): Promise<string> {
+        // Dynamically import db
+        const { db } = await import('./db');
+
+        // Get backlinks
+        const backlinks = await db.getBacklinksWithContext(obj.id);
+
+        if (backlinks.length === 0) {
+            return '';
+        }
+
+        let html = '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 40px 0 20px 0;">\n';
+        html += '<h3 style="color: #444; font-family: Arial, sans-serif; font-size: 14pt; margin-bottom: 15px;">Linked References</h3>\n';
+        html += '<div style="font-family: Arial, sans-serif; font-size: 10pt;">\n';
+
+        for (const backlink of backlinks) {
+            // Get source object to check for Drive ID
+            const sourceObj = await db.getObjectById(backlink.sourceDocId);
+            let titleHtml = backlink.sourceDocTitle;
+
+            if (sourceObj && sourceObj.driveFileId) {
+                const url = `https://docs.google.com/document/d/${sourceObj.driveFileId}/edit`;
+                titleHtml = `<a href="${url}" style="color: #1a73e8; text-decoration: none; font-weight: bold;">${backlink.sourceDocTitle}</a>`;
+            } else {
+                titleHtml = `<span style="font-weight: bold; color: #333;">${backlink.sourceDocTitle}</span>`;
+            }
+
+            html += '<div style="margin-bottom: 20px;">\n';
+            html += `  <div style="margin-bottom: 4px;">${titleHtml} <span style="color: #888; font-size: 8pt;">(${new Date(backlink.sourceDocDate).toLocaleDateString()})</span></div>\n`;
+
+            for (const context of backlink.mentionContexts) {
+                // Highlight the mention in the context if possible, or just show it
+                // We'll use a simple blockquote style
+                html += `  <div style="color: #555; padding-left: 12px; border-left: 3px solid #eee; margin-top: 4px; line-height: 1.4;">\n`;
+                html += `    "${context.contextText}"\n`;
+                html += `  </div>\n`;
+            }
+            html += '</div>\n';
+        }
+
+        html += '</div>\n';
+        return html;
     }
 }
 

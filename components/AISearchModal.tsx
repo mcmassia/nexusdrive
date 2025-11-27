@@ -19,14 +19,21 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
   const [searchResults, setSearchResults] = useState<NexusObject[]>([]);
   const [typeColors, setTypeColors] = useState<Record<string, string>>({});
 
+  const [searchTime, setSearchTime] = useState<number | null>(null);
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
     setIsLoading(true);
     setResponse(null);
+    setSearchTime(null);
 
+    const startTime = performance.now();
     const localResults = await db.vectorSearch(query);
+    const endTime = performance.now();
+    setSearchTime(endTime - startTime);
+
     setResults(localResults);
 
     const aiAnswer = await geminiService.generateRAGResponse(query, localResults, lang);
@@ -35,63 +42,45 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     setIsLoading(false);
   };
 
+  // Load type colors on mount
   React.useEffect(() => {
     const loadColors = async () => {
       const schemas = await db.getAllTypeSchemas();
       const colors: Record<string, string> = {};
-      schemas.forEach(s => {
-        if (s.color) colors[s.type] = s.color;
+      schemas.forEach(schema => {
+        if (schema.color) {
+          colors[schema.type] = schema.color;
+        }
       });
       setTypeColors(colors);
     };
     loadColors();
   }, []);
 
-  // Effect to colorize mentions after response is rendered
-  React.useEffect(() => {
-    if (!response) return;
-
-    const colorize = async () => {
-      const container = document.getElementById('ai-response-content');
-      if (!container) return;
-
-      const mentions = container.querySelectorAll('.nexus-mention');
-      mentions.forEach(mention => {
-        const el = mention as HTMLElement;
-        // Try to get type from data attribute first
-        let type = el.dataset.objectType;
-
-        // If not present (legacy or AI missed it), try to find object in results
-        if (!type && el.dataset.objectId) {
-          const obj = results.find(r => r.id === el.dataset.objectId);
-          if (obj) type = obj.type;
-        }
-
-        if (type && typeColors[type]) {
-          el.style.color = typeColors[type];
-        } else {
-          // Fallback default color
-          el.style.color = '#3b82f6';
-        }
-      });
-    };
-
-    // Small timeout to ensure DOM is ready
-    setTimeout(colorize, 100);
-  }, [response, results, typeColors]);
+  // ... (useEffect for colorize)
 
   // Real-time search effect (only in search mode)
   React.useEffect(() => {
     if (mode === 'search' && query.trim()) {
       const timer = setTimeout(async () => {
+        const startTime = performance.now();
         const results = await db.vectorSearch(query);
+        const endTime = performance.now();
+        setSearchTime(endTime - startTime);
         setSearchResults(results);
       }, 300);
       return () => clearTimeout(timer);
     } else if (mode === 'search' && !query.trim()) {
       setSearchResults([]);
+      setSearchTime(null);
     }
   }, [query, mode]);
+
+  // Helper to format time
+  const formatTime = (ms: number) => {
+    const seconds = (ms / 1000).toFixed(2);
+    return `${seconds}s`;
+  };
 
   // Handle clicks on internal links in the AI response
   const handleContentClick = async (e: React.MouseEvent<HTMLDivElement>) => {
@@ -214,6 +203,11 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                   <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-4 flex items-center gap-2">
                     <Search size={14} />
                     {lang === 'es' ? `${searchResults.length} Resultados` : `${searchResults.length} Results`}
+                    {searchTime && (
+                      <span className="ml-2 text-slate-400 font-normal normal-case opacity-75">
+                        ({formatTime(searchTime)})
+                      </span>
+                    )}
                   </h3>
 
                   <div className="grid gap-3">
@@ -235,9 +229,9 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                           <span
                             className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
                             style={{
-                              backgroundColor: typeColors[obj.type] ? `${typeColors[obj.type]}20` : '#f1f5f9',
-                              color: typeColors[obj.type] || '#64748b',
-                              borderColor: typeColors[obj.type] ? `${typeColors[obj.type]}40` : '#e2e8f0'
+                              backgroundColor: typeColors[obj.type] || '#64748b',
+                              color: '#ffffff',
+                              borderColor: 'transparent'
                             }}
                           >
                             {obj.type}

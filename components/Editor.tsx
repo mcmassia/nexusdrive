@@ -271,6 +271,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             onTagClick={onTagClick}
                             allObjects={objects}
                             typeSchema={typeSchema}
+                            availableSchemas={availableSchemas}
                             onDocumentClick={async (docId) => {
                                 const obj = await db.getObjectById(docId);
                                 if (obj) {

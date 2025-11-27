@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NexusObject, NexusProperty, TypeSchema } from '../types';
-
 
 interface MetadataTableProps {
   object: NexusObject;
@@ -9,45 +9,73 @@ interface MetadataTableProps {
   onTagClick?: (tag: string) => void;
   allObjects?: NexusObject[];
   typeSchema?: TypeSchema;
+  availableSchemas?: TypeSchema[];
   onDocumentClick?: (documentId: string) => void;
   lang: 'en' | 'es';
 }
 
-const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, onDocumentClick, lang }) => {
-  // ... (existing state and handlers)
+const normalizeText = (text: string) => {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
 
-  // ... (inside return)
-  const [suggestionBox, setSuggestionBox] = React.useState<{
+const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, availableSchemas = [], onDocumentClick, lang }) => {
+  const [suggestionBox, setSuggestionBox] = useState<{
     visible: boolean;
     top: number;
     left: number;
+    width: number;
     filter: string;
     index: number;
   } | null>(null);
+
+  // Local state to track search input values for document/documents types
+  const [searchInputs, setSearchInputs] = useState<{ [key: number]: string }>({});
+
+  const suggestionRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+        setSuggestionBox(null);
+      }
+    };
+
+    if (suggestionBox?.visible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [suggestionBox]);
+
+  const handleSearchChange = (index: number, value: string, targetElement: HTMLElement) => {
+    // Update local search state
+    setSearchInputs(prev => ({ ...prev, [index]: value }));
+
+    // Check for @ mention trigger
+    if (value.includes('@')) {
+      const parts = value.split('@');
+      const lastPart = parts[parts.length - 1];
+
+      const rect = targetElement.getBoundingClientRect();
+      setSuggestionBox({
+        visible: true,
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        filter: lastPart,
+        index
+      });
+    } else {
+      setSuggestionBox(null);
+    }
+  };
 
   const handleValueChange = (index: number, value: string | string[]) => {
     const newMetadata = [...object.metadata];
     newMetadata[index].value = value;
     onChange(newMetadata);
-
-    // Check for @ mention trigger (for text, document, documents)
-    if (typeof value === 'string' && value.endsWith('@')) {
-      // Find input element position (simplified for now, just showing below)
-      // In a real app we'd use a ref to get exact coordinates
-      setSuggestionBox({
-        visible: true,
-        top: 0, // Position handled by CSS relative to container for now
-        left: 0,
-        filter: '',
-        index
-      });
-    } else if (suggestionBox && typeof value === 'string') {
-      const parts = value.split('@');
-      const lastPart = parts[parts.length - 1];
-      setSuggestionBox(prev => prev ? { ...prev, filter: lastPart } : null);
-    } else {
-      setSuggestionBox(null);
-    }
   };
 
   const handleSuggestionSelect = (obj: NexusObject) => {
@@ -64,14 +92,65 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
       const currentIds = Array.isArray(prop.value) ? prop.value : [];
       prop.value = [...currentIds, obj.id];
     } else {
-      // For other types, remove the @ part and replace with title
+      // For other types (if we support @ there), replace with title
+      // This part might need adjustment if we use local search state for them too, 
+      // but for now document/documents are the main focus.
       const parts = (prop.value as string).split('@');
-      parts.pop(); // Remove the incomplete query
+      parts.pop();
       prop.value = parts.join('@') + obj.title;
     }
 
     onChange(newMetadata);
+
+    // Clear search input and close box
+    setSearchInputs(prev => ({ ...prev, [suggestionBox.index]: '' }));
     setSuggestionBox(null);
+  };
+
+  const renderSuggestions = () => {
+    if (!suggestionBox || !suggestionBox.visible) return null;
+
+    const normalizedFilter = normalizeText(suggestionBox.filter);
+    const filteredObjects = allObjects
+      .filter(o => normalizeText(o.title).includes(normalizedFilter))
+      .slice(0, 10); // Increased limit slightly
+
+    return createPortal(
+      <div
+        ref={suggestionRef}
+        style={{
+          top: suggestionBox.top,
+          left: suggestionBox.left,
+          minWidth: Math.max(200, suggestionBox.width)
+        }}
+        className="fixed z-[9999] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl mt-1 animate-in fade-in zoom-in-95 duration-100"
+      >
+        {filteredObjects.map(o => {
+          const schema = availableSchemas.find(s => s.type === o.type);
+          const typeColor = schema?.color || '#64748b'; // Default slate-500
+
+          return (
+            <button
+              key={o.id}
+              onClick={() => handleSuggestionSelect(o)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 truncate border-b border-slate-100 dark:border-slate-700/50 last:border-0 flex items-center gap-3"
+            >
+              <span
+                className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded shrink-0 border border-transparent text-white shadow-sm"
+                style={{ backgroundColor: typeColor }}
+              >
+                {o.type}
+              </span>
+              <span className="truncate font-medium">{o.title}</span>
+            </button>
+          );
+        })}
+        {filteredObjects.length === 0 && (
+          <div className="px-3 py-2 text-xs text-slate-400 italic">No matches found</div>
+        )}
+      </div>,
+      document.body
+    );
   };
 
   const renderPropertyInput = (prop: NexusProperty, index: number) => {
@@ -79,29 +158,6 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
     const schemaProp = typeSchema?.properties.find(p => p.key === prop.key);
     // Use type from schema if available, otherwise fallback to prop.type
     const effectiveType = schemaProp?.type || prop.type;
-
-    // Helper to render suggestion box
-    const renderSuggestions = () => (
-      suggestionBox && suggestionBox.index === index && (
-        <div className="absolute top-full left-0 z-[100] w-64 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl mt-1">
-          {allObjects
-            .filter(o => o.title.toLowerCase().includes(suggestionBox.filter.toLowerCase()))
-            .slice(0, 5)
-            .map(o => (
-              <button
-                key={o.id}
-                onClick={() => handleSuggestionSelect(o)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 truncate border-b border-slate-100 dark:border-slate-700/50 last:border-0"
-              >
-                {o.title}
-              </button>
-            ))}
-          {allObjects.filter(o => o.title.toLowerCase().includes(suggestionBox.filter.toLowerCase())).length === 0 && (
-            <div className="px-3 py-2 text-xs text-slate-400 italic">No matches found</div>
-          )}
-        </div>
-      )
-    );
 
     switch (effectiveType) {
       case 'number':
@@ -286,12 +342,11 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
             ))}
             <input
               type="text"
-              value=""
-              onChange={(e) => handleValueChange(index, e.target.value)}
+              value={searchInputs[index] || ''}
+              onChange={(e) => handleSearchChange(index, e.target.value, e.currentTarget)}
               className="flex-1 min-w-[100px] bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200 italic"
               placeholder="Type @ to search..."
             />
-            {renderSuggestions()}
           </div>
         );
 
@@ -511,6 +566,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           </tr>
         </tbody>
       </table>
+      {renderSuggestions()}
     </div>
   );
 };

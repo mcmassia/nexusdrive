@@ -4,6 +4,7 @@ import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
 import { calendarService } from './calendarService';
+import { vectorService } from './vectorService';
 
 // IndexedDB Schema
 interface NexusDB extends DBSchema {
@@ -50,12 +51,17 @@ interface NexusDB extends DBSchema {
       bodyPlain: string;
       hasAttachments: boolean;
       labels: string[];
+      owner?: string;
     };
     indexes: { 'by-date': Date; 'by-sender': string };
   };
   gmail_preferences: {
     key: string; // 'default'
     value: GmailPreferences;
+  };
+  embeddings: {
+    key: string; // object ID
+    value: { id: string; vector: number[] };
   };
 }
 
@@ -85,7 +91,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 7, {
+      this.db = await openDB<NexusDB>('nexus-db', 8, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -144,6 +150,11 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('gmail_preferences')) {
             db.createObjectStore('gmail_preferences', { keyPath: 'id' });
             console.log('[LocalDB] Created gmail_preferences store');
+          }
+          // NEW in v2.4: Vector Embeddings store
+          if (!db.objectStoreNames.contains('embeddings')) {
+            db.createObjectStore('embeddings', { keyPath: 'id' });
+            console.log('[LocalDB] Created embeddings store');
           }
         },
       });
@@ -563,6 +574,18 @@ class LocalDatabase {
       await this.db.put('objects', { ...updatedObject, driveFileId });
       console.log(`✅[LocalDB] Object "${updatedObject.title}" saved locally`);
 
+      // Generate and save embedding
+      try {
+        const textToEmbed = `${updatedObject.title} ${updatedObject.content} ${updatedObject.tags?.join(' ') || ''}`;
+        const vector = await vectorService.embed(textToEmbed);
+        if (vector) {
+          await this.db.put('embeddings', { id: updatedObject.id, vector });
+          console.log(`🧠[LocalDB] Embedding generated for "${updatedObject.title}"`);
+        }
+      } catch (err) {
+        console.error('[LocalDB] Failed to generate embedding:', err);
+      }
+
       // Sync to Drive if not in demo mode
       if (!authService.isInDemoMode()) {
         console.log(`🔄[LocalDB] Syncing "${updatedObject.title}" to Drive...`);
@@ -685,114 +708,136 @@ class LocalDatabase {
 
   /**
    * Vector search (simulated for now)
-   */
-  /**
-   * Vector search (simulated for now)
    * Improved to use keyword matching instead of strict substring
    */
+  // Helper for normalization
+  private normalize(str: string): string {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
   async vectorSearch(query: string): Promise<NexusObject[]> {
-    const objects = await this.getObjects();
-    const emails = await this.getGmailMessages(500); // Increased limit for better recall
+    if (!this.db) return [];
 
-    // Map emails to NexusObject structure
-    const emailObjects: NexusObject[] = emails.map(email => ({
-      id: email.id,
-      title: email.subject || 'No Subject',
-      type: NexusType.EMAIL,
-      // Combine body, snippet, subject, and sender/recipient for better recall
-      // This ensures we find emails even if body is empty or we only remember the sender
-      content: [
-        email.subject,
-        email.from,
-        email.to,
-        email.snippet,
-        email.bodyPlain
-      ].filter(Boolean).join(' '),
-      lastModified: email.date,
-      tags: ['email'],
-      metadata: [
-        { key: 'from', label: 'From', value: email.from, type: 'text' },
-        { key: 'to', label: 'To', value: email.to, type: 'text' }
-      ]
-    }));
+    try {
+      console.log(`🔍[LocalDB] Starting hybrid search for: "${query}"`);
+      const normalizedQuery = this.normalize(query);
+      const resultsMap = new Map<string, NexusObject>();
+      const scoresMap = new Map<string, number>();
 
-    const allItems = [...objects, ...emailObjects];
+      // --- 1. Keyword Search (Exact Matches) ---
+      const allObjects = await this.getObjects();
+      const keywordMatches = allObjects.filter(obj => {
+        const title = this.normalize(obj.title);
+        const content = this.normalize(obj.content);
+        const tags = obj.tags?.map(t => this.normalize(t)) || [];
 
-    // Normalize query: remove accents/diacritics and lowercase
-    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const normalizedQuery = normalize(query);
-
-    // Stop words (English & Spanish)
-    const STOP_WORDS = new Set([
-      // Spanish
-      'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'pero', 'por', 'para', 'con', 'de', 'del', 'al',
-      'que', 'quien', 'cual', 'como', 'donde', 'cuando', 'es', 'son', 'fue', 'fueron', 'ser', 'estar', 'tener', 'hacer',
-      'informacion', 'sobre', 'este', 'esta', 'estos', 'estas', 'todo', 'toda', 'todos', 'todas', 'hay', 'mis', 'tus', 'sus',
-      'tenemos', 'tengo', 'tienes', 'tiene', 'tienen', 'hago', 'haces', 'hace', 'hacemos', 'hacen',
-      // English
-      'the', 'a', 'an', 'and', 'or', 'but', 'for', 'of', 'in', 'on', 'at', 'to', 'from', 'by', 'with', 'about',
-      'what', 'who', 'which', 'how', 'where', 'when', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
-      'do', 'does', 'did', 'this', 'that', 'these', 'those', 'all', 'any', 'some', 'info', 'information',
-      'we', 'you', 'i', 'my', 'your', 'our'
-    ]);
-
-    // Split query into terms and filter out stop words and short words
-    const terms = normalizedQuery.split(/\s+/).filter(t => t.length > 2 && !STOP_WORDS.has(t));
-
-    // If all terms were stop words (e.g. "que es la..."), fall back to original terms to return something
-    const searchTerms = terms.length > 0 ? terms : normalizedQuery.split(/\s+/).filter(t => t.length > 2);
-
-    if (searchTerms.length === 0) return [];
-
-    // Score items based on term matches
-    const scoredItems = allItems.map(obj => {
-      let score = 0;
-      let matches = 0;
-      const title = normalize(obj.title);
-      const content = normalize(obj.content);
-      const tags = obj.tags?.map(t => normalize(t)) || [];
-
-      searchTerms.forEach(term => {
-        let termMatched = false;
-
-        // Title match
-        if (title.includes(term)) {
-          score += 10;
-          termMatched = true;
-        }
-
-        // Content match (increased weight)
-        if (content.includes(term)) {
-          score += 5; // Was 1, increased to 5 to make content matches more significant
-          termMatched = true;
-        }
-
-        // Tag match
-        if (tags.some(t => t.includes(term))) {
-          score += 8;
-          termMatched = true;
-        }
-
-        if (termMatched) matches++;
+        return title.includes(normalizedQuery) ||
+          content.includes(normalizedQuery) ||
+          tags.some(t => t.includes(normalizedQuery));
       });
 
-      // Bonus for matching multiple terms
-      if (matches > 0) {
-        const matchPercentage = matches / searchTerms.length;
-        if (matchPercentage === 1) score += 50; // Perfect match bonus
-        else if (matchPercentage >= 0.5) score += 20; // Good match bonus
+      console.log(`🔍[LocalDB] Found ${keywordMatches.length} keyword matches`);
+
+      // Add keyword matches to results with a base score
+      keywordMatches.forEach(obj => {
+        resultsMap.set(obj.id, obj);
+        // Give a high base score for keyword matches to ensure they appear
+        scoresMap.set(obj.id, 0.5);
+      });
+
+      // --- 2. Vector Search (Semantic Matches) ---
+      try {
+        // Only run vector search if query is long enough (performance optimization)
+        if (query.length > 2) {
+          const queryVector = await vectorService.embed(query);
+
+          if (queryVector) {
+            const allEmbeddings = await this.db.getAll('embeddings');
+            console.log(`🔍[LocalDB] Found ${allEmbeddings.length} embeddings to compare`);
+
+            allEmbeddings.forEach(item => {
+              const similarity = vectorService.cosineSimilarity(queryVector, item.vector);
+
+              // Increased threshold to 0.55 to be extremely strict
+              // This ensures only very relevant semantic matches appear
+              if (similarity > 0.55) {
+                console.log(`[LocalDB] Vector match: ${item.id} score=${similarity.toFixed(3)}`);
+                // If object already found by keyword, boost its score
+                if (scoresMap.has(item.id)) {
+                  const currentScore = scoresMap.get(item.id) || 0;
+                  scoresMap.set(item.id, currentScore + similarity);
+                } else {
+                  scoresMap.set(item.id, similarity);
+                }
+              }
+            });
+          }
+        }
+      } catch (vectorErr) {
+        console.warn('[LocalDB] Vector search failed, relying on keywords:', vectorErr);
       }
 
-      return { obj, score };
-    });
+      // --- 3. Merge and Sort ---
+      // Get all IDs with scores, sorted by score desc
+      const sortedIds = Array.from(scoresMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(entry => entry[0])
+        .slice(0, 20); // Top 20
 
-    // Filter by score > 0 and sort by score desc
-    return scoredItems
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map(item => item.obj)
-      .slice(0, 20); // Return top 20 relevant results
+      // Fetch missing objects
+      for (const id of sortedIds) {
+        if (!resultsMap.has(id)) {
+          const obj = await this.getObjectById(id);
+          if (obj) {
+            resultsMap.set(id, obj);
+          }
+        }
+      }
+
+      // Construct final result list in order
+      const finalResults: NexusObject[] = [];
+      for (const id of sortedIds) {
+        const obj = resultsMap.get(id);
+        if (obj) finalResults.push(obj);
+      }
+
+      // --- 4. Email Search (Keyword fallback) ---
+      try {
+        const emails = await this.getGmailMessages(50);
+        const emailResults = emails.filter(email => {
+          const subject = this.normalize(email.subject || '');
+          const snippet = this.normalize(email.snippet || '');
+          const from = this.normalize(email.from || '');
+
+          return subject.includes(normalizedQuery) ||
+            snippet.includes(normalizedQuery) ||
+            from.includes(normalizedQuery);
+        }).map(email => ({
+          id: email.id,
+          title: email.subject || 'No Subject',
+          type: NexusType.EMAIL,
+          content: email.snippet || '',
+          lastModified: email.date,
+          tags: ['email'],
+          metadata: [
+            { key: 'from', label: 'From', value: email.from, type: 'text' as const }
+          ]
+        }));
+
+        finalResults.push(...emailResults);
+      } catch (emailErr) {
+        console.warn('[LocalDB] Failed to search emails:', emailErr);
+      }
+
+      return finalResults;
+
+    } catch (error) {
+      console.error('[LocalDB] Search failed:', error);
+      return [];
+    }
   }
+
+
 
   // Dashboard methods
   async getRecents(limit: number = 5, excludeId?: string): Promise<NexusObject[]> {
