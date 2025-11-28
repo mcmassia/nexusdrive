@@ -330,11 +330,15 @@ const App: React.FC = () => {
       }
     }
 
+    // Check for default template
+    const defaultTemplate = schema?.templates?.find(t => t.isDefault);
+    const initialContent = defaultTemplate ? defaultTemplate.content : '';
+
     const newObj: NexusObject = {
       id: Date.now().toString(),
       title: finalTitle || 'Untitled',
       type,
-      content: '',
+      content: initialContent,
       metadata,
       lastModified: new Date(),
       tags: []

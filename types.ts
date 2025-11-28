@@ -56,11 +56,19 @@ export interface PropertyDefinition {
   options?: string[]; // For multiselect type
 }
 
+export interface Template {
+  id: string;
+  name: string;
+  content: string; // HTML
+  isDefault: boolean;
+}
+
 export interface TypeSchema {
   type: NexusType | string; // Built-in or custom type
   properties: PropertyDefinition[];
   icon?: string;
   color?: string;
+  templates?: Template[];
 }
 
 export interface NexusTask {

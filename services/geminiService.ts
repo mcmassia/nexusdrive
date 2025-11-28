@@ -73,6 +73,10 @@ export class GeminiService {
       User Question: ${query}`;
 
       // 2. Call Gemini with JSON instruction
+      if (!this.ai) {
+        throw new Error("Gemini API not initialized. Check VITE_GEMINI_API_KEY.");
+      }
+
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -99,9 +103,12 @@ export class GeminiService {
       }
 
       return finalHtml;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini API Error:", error);
-      return lang === 'es' ? "Error conectando con NexusAI. Por favor verifica tu configuración." : "Error connecting to NexusAI. Please check your API configuration.";
+      const msg = error.message || String(error);
+      return lang === 'es'
+        ? `Error conectando con NexusAI: ${msg}`
+        : `Error connecting to NexusAI: ${msg}`;
     }
   }
 

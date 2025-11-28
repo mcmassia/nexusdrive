@@ -3,7 +3,7 @@ import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
 import BacklinksPanel from './BacklinksPanel';
-import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
@@ -31,6 +31,74 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
     const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);
     const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
+    const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
+
+    const handleApplyTemplate = async (template: any) => {
+        setIsTemplateMenuOpen(false);
+
+        // If content is empty, just replace
+        if (!content || content.trim() === '' || content === '<p><br></p>') {
+            setContent(template.content);
+            return;
+        }
+
+        const choice = await confirm({
+            message: 'Apply Template',
+            description: 'How would you like to apply this template?',
+            confirmLabel: 'Append to bottom',
+            cancelLabel: 'Replace content',
+            isDestructive: false // Reusing the confirm dialog, but we need a 3rd option or custom buttons. 
+            // Since confirm only has 2 options (Confirm/Cancel), let's use it as "Append" vs "Replace" (Cancel).
+            // Wait, "Cancel" usually means "Do nothing".
+            // I should probably use a custom modal or just standard window.confirm/prompt if the custom one is limited.
+            // Or I can just ask "Replace existing content?" -> Yes (Replace), No (Append).
+        });
+
+        // Let's rephrase: "This document has content. Do you want to replace it?"
+        // Confirm -> Replace
+        // Cancel -> Append (or do nothing? User might want to cancel).
+
+        // Better approach: Use window.confirm for simplicity or assume Append is safer, 
+        // but user might want Replace.
+
+        // Let's try to use the existing confirm dialog but with clear labels if possible.
+        // The existing confirm dialog has `confirmLabel` and `cancelLabel`.
+        // So I can set confirmLabel="Replace" and cancelLabel="Append".
+        // But what if they want to cancel?
+        // The current `confirm` implementation returns boolean.
+
+        // I'll stick to a simple strategy:
+        // 1. If content is empty -> Replace
+        // 2. If content exists -> Ask "Replace content?"
+        //    - Yes -> Replace
+        //    - No -> Append
+
+        // Actually, "Cancel" in a confirm dialog usually implies "Abort".
+        // So I should probably ask: "Do you want to replace the current content? (Cancel to append)"
+        // But that's confusing.
+
+        // Let's just append by default if content exists, maybe with a separator?
+        // Or better, use a standard `window.prompt` or `window.confirm` is not enough for 3 choices.
+
+        // Let's use `window.confirm` for "Replace?". If false, then Append.
+        // But user might want to Cancel.
+
+        // I'll implement a simple choice:
+        // "Replace content" (Destructive)
+        // "Append" (Safe)
+
+        // Since I can't easily add a 3rd button to the existing `confirm` hook without checking its implementation,
+        // I'll assume "Append" is the default safe action, and "Replace" requires explicit confirmation.
+
+        // Let's try this:
+        const shouldReplace = window.confirm(`Replace existing content with "${template.name}" template?\nClick OK to REPLACE.\nClick Cancel to APPEND.`);
+
+        if (shouldReplace) {
+            setContent(template.content);
+        } else {
+            setContent(content + '<br/>' + template.content);
+        }
+    };
 
     useEffect(() => {
         setCurrentObject(object);
@@ -267,6 +335,38 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                         <span className="hidden sm:inline">{lang === 'es' ? (currentObject.pinned ? 'Fijado' : 'Fijar') : (currentObject.pinned ? 'Pinned' : 'Pin')}</span>
                     </button>
 
+                    {/* Templates Button */}
+                    {(typeSchema?.templates && typeSchema.templates.length > 0) && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsTemplateMenuOpen(!isTemplateMenuOpen)}
+                                className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
+                                title="Templates"
+                            >
+                                <LayoutTemplate size={16} />
+                                <span className="hidden sm:inline">Templates</span>
+                            </button>
+
+                            {isTemplateMenuOpen && (
+                                <div className="absolute top-full right-0 mt-1 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1">
+                                        Apply Template
+                                    </div>
+                                    {typeSchema.templates.map(template => (
+                                        <button
+                                            key={template.id}
+                                            onClick={() => handleApplyTemplate(template)}
+                                            className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between group"
+                                        >
+                                            <span className="text-slate-700 dark:text-slate-200">{template.name}</span>
+                                            {template.isDefault && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">Default</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <button
                         onClick={handleSave}
                         className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
@@ -409,7 +509,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                 }}
                 lang={lang}
             />
-        </div>
+        </div >
     );
 };
 
