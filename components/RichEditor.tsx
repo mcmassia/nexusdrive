@@ -644,10 +644,13 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         // Task List: TD (case insensitive)
         if (lineText.toLowerCase() === 'td') {
           console.log('Detected Task Trigger (TD)');
-          // Insert checkbox
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.className = 'nexus-task mr-2 cursor-pointer';
+
+          // Create the visual task tag
+          const taskTag = document.createElement('span');
+          taskTag.contentEditable = 'false';
+          taskTag.className = 'nexus-task-tag task mr-2 cursor-pointer select-none px-2 py-0.5 rounded text-xs font-bold bg-red-500 text-white';
+          taskTag.textContent = 'TAREA';
+          taskTag.dataset.status = 'todo';
 
           // Delete the TD text and the space
           const rangeToDelete = document.createRange();
@@ -655,10 +658,10 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           rangeToDelete.setEnd(textNode, cursorPos);
           rangeToDelete.deleteContents();
 
-          range.insertNode(checkbox);
+          range.insertNode(taskTag);
 
           // Move cursor after
-          range.setStartAfter(checkbox);
+          range.setStartAfter(taskTag);
           range.collapse(true);
           selection.removeAllRanges();
           selection.addRange(range);
@@ -795,6 +798,34 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   const handleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+
+    // Handle Visual Task Tag Click
+    if (target.classList.contains('nexus-task-tag')) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isTodo = target.classList.contains('task');
+
+      if (isTodo) {
+        // Switch to DONE
+        target.classList.remove('task', 'bg-red-500');
+        target.classList.add('done', 'bg-green-700');
+        target.textContent = 'REALIZADO';
+        target.dataset.status = 'done';
+      } else {
+        // Switch to TODO
+        target.classList.remove('done', 'bg-green-700');
+        target.classList.add('task', 'bg-red-500');
+        target.textContent = 'TAREA';
+        target.dataset.status = 'todo';
+      }
+
+      // Trigger change to save state
+      if (editorRef.current) {
+        onChange(editorRef.current.innerHTML);
+      }
+      return;
+    }
 
     // Handle Checkbox Click (Task or Visual)
     if (target.tagName === 'INPUT' && (target.classList.contains('nexus-task') || target.classList.contains('nexus-checkbox'))) {

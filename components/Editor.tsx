@@ -165,20 +165,30 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
         // Extract Tasks
         const tasks: any[] = [];
-        const taskElements = tempDiv.querySelectorAll('.nexus-task');
-        taskElements.forEach((el) => {
-            const checkbox = el as HTMLInputElement;
-            // Get text following the checkbox
-            let taskContent = '';
-            let nextNode = checkbox.nextSibling;
+        // Support both old checkboxes and new visual tags
+        const taskElements = tempDiv.querySelectorAll('.nexus-task, .nexus-task-tag');
 
-            // Collect text until next block element or another checkbox
+        taskElements.forEach((el) => {
+            let isCompleted = false;
+            let taskContent = '';
+            let nextNode = el.nextSibling;
+
+            // Determine completion status
+            if (el.tagName === 'INPUT') {
+                isCompleted = (el as HTMLInputElement).hasAttribute('checked');
+            } else {
+                isCompleted = el.classList.contains('done') || el.textContent === 'REALIZADO';
+            }
+
+            // Collect text until next block element or another task
             while (nextNode) {
                 if (nextNode.nodeType === Node.TEXT_NODE) {
                     taskContent += nextNode.textContent;
                 } else if (nextNode.nodeType === Node.ELEMENT_NODE) {
                     const element = nextNode as HTMLElement;
-                    if (['DIV', 'P', 'H1', 'H2', 'H3', 'LI', 'UL', 'OL', 'BLOCKQUOTE'].includes(element.tagName)) {
+                    if (['DIV', 'P', 'H1', 'H2', 'H3', 'LI', 'UL', 'OL', 'BLOCKQUOTE'].includes(element.tagName) ||
+                        element.classList.contains('nexus-task') ||
+                        element.classList.contains('nexus-task-tag')) {
                         break;
                     }
                     // Skip completion date
@@ -193,7 +203,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                 tasks.push({
                     id: Math.random().toString(36).substr(2, 9), // Simple ID generation
                     content: taskContent.trim(),
-                    completed: checkbox.hasAttribute('checked'), // Check attribute, not property, as we set it manually
+                    completed: isCompleted,
                     createdAt: new Date(),
                     documentId: currentObject.id
                 });
