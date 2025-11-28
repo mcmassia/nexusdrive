@@ -81,6 +81,7 @@ export interface NexusObject {
   metadata: NexusProperty[];
   driveFileId?: string; // Google Drive file ID for linking
   extractedTasks?: NexusTask[];
+  pinned?: boolean;
 }
 
 export interface GraphNode extends SimulationNodeDatum {

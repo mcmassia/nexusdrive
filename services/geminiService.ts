@@ -132,6 +132,8 @@ export class GeminiService {
       return [];
     }
   }
+
+
 }
 
 export const geminiService = new GeminiService();

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NexusObject, NexusProperty, TypeSchema } from '../types';
+import { NexusObject, NexusProperty, TypeSchema, NexusType } from '../types';
 
 interface MetadataTableProps {
   object: NexusObject;
@@ -30,6 +30,8 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
 
   // Local state to track search input values for document/documents types
   const [searchInputs, setSearchInputs] = useState<{ [key: number]: string }>({});
+  // Local state for optimistically created objects (to display them before parent refresh)
+  const [createdObjects, setCreatedObjects] = useState<NexusObject[]>([]);
 
   const suggestionRef = useRef<HTMLDivElement>(null);
 
@@ -107,13 +109,95 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
     setSuggestionBox(null);
   };
 
+  const handleCreateDocument = async (type: NexusType, title: string) => {
+    if (!suggestionBox) return;
+
+    // 1. Create the new object
+    const newObj: NexusObject = {
+      id: Date.now().toString(),
+      title: title,
+      type: type,
+      content: '',
+      metadata: [], // Should ideally load default schema, but empty is safe for now
+      lastModified: new Date(),
+      tags: []
+    };
+
+    // Load schema to populate default metadata if possible (async operation inside sync flow is tricky here without refactor, 
+    // but we can try to get it from availableSchemas if it has default values, or just leave empty for now)
+    // For a robust implementation, we might want to call a service that handles this, but we'll stick to basic creation.
+
+    // We need to save it to DB
+    // Import db service dynamically or pass it as prop? 
+    // The component doesn't import db. It receives objects. 
+    // We need a prop for onObjectCreate or similar if we want to be pure, 
+    // OR we can import db here since we are in a "smart" component.
+    // Looking at imports, db is not imported. Let's import it.
+    // Wait, we can't easily add imports with replace_file_content if we don't target the top.
+    // Let's assume we will add the import in a separate step or use a prop if available.
+    // Actually, `Sidebar` imports `db`. `Dashboard` imports `db`. `App` imports `db`.
+    // This component `MetadataTable` seems to be presentational but `allObjects` suggests it has data.
+    // Looking at imports, db is not imported. Let's check imports again. Line 1-3. No db.
+    // We should probably pass `onCreateDocument` prop from parent (Editor.tsx).
+    // BUT, for now, to avoid refactoring parents, I will add `import { db } from '../services/db';` to the top in a separate step.
+
+    // For this step, I will assume `db` is available or I will add it.
+    // Let's write the logic assuming `db` will be imported.
+
+    // Optimistic update: Add to local createdObjects so it can be found by renderPropertyInput
+    setCreatedObjects(prev => [...prev, newObj]);
+
+    await import('../services/db').then(m => m.db.saveObject(newObj));
+
+    // 2. Link it
+    handleSuggestionSelect(newObj);
+  };
+
   const renderSuggestions = () => {
     if (!suggestionBox || !suggestionBox.visible) return null;
 
     const normalizedFilter = normalizeText(suggestionBox.filter);
-    const filteredObjects = allObjects
+    // Include createdObjects in the search pool
+    const pool = [...allObjects, ...createdObjects];
+    // Deduplicate by ID just in case
+    const uniquePool = Array.from(new Map(pool.map(item => [item.id, item])).values());
+
+    const filteredObjects = uniquePool
       .filter(o => normalizeText(o.title).includes(normalizedFilter))
-      .slice(0, 10); // Increased limit slightly
+      .slice(0, 10);
+
+    // Check for @Type/Title syntax
+    const match = suggestionBox.filter.match(/^@?([a-zA-Z0-9]+)\/(.+)$/);
+    let createOption = null;
+
+    if (match) {
+      const typeName = match[1];
+      const title = match[2];
+      // Check if type is valid
+      const isValidType = availableSchemas.some(s => s.type.toLowerCase() === typeName.toLowerCase());
+
+      if (isValidType) {
+        // Find exact case for type
+        const schema = availableSchemas.find(s => s.type.toLowerCase() === typeName.toLowerCase());
+        if (schema) {
+          createOption = { type: schema.type as NexusType, title };
+        }
+      }
+    } else if (filteredObjects.length === 0 && suggestionBox.filter.length > 0) {
+      // Fallback: Allow creating a generic Note or Page if no match? 
+      // Or maybe just show "No matches".
+      // The user specifically asked for @Type/Title syntax.
+      // But also "if the document does not exist, have the option to create it".
+      // If they just type "Sevilla" and it doesn't exist, maybe we shouldn't guess the type.
+      // So we strictly follow the syntax for creation OR if they are in a specific typed field?
+      // The field itself might have `allowedTypes`.
+
+      const prop = object.metadata[suggestionBox.index];
+      if (prop.allowedTypes && prop.allowedTypes.length === 1) {
+        // If field only allows one type, we can offer to create that type
+        createOption = { type: prop.allowedTypes[0], title: suggestionBox.filter };
+      }
+    }
 
     return createPortal(
       <div
@@ -125,9 +209,21 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
         }}
         className="fixed z-[9999] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl mt-1 animate-in fade-in zoom-in-95 duration-100"
       >
+        {createOption && (
+          <button
+            onClick={() => handleCreateDocument(createOption.type, createOption.title)}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 truncate border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-3 font-medium"
+          >
+            <span className="text-lg">✨</span>
+            <span>
+              {lang === 'es' ? 'Crear' : 'Create'} <strong>{createOption.type}</strong>: {createOption.title}
+            </span>
+          </button>
+        )}
+
         {filteredObjects.map(o => {
           const schema = availableSchemas.find(s => s.type === o.type);
-          const typeColor = schema?.color || '#64748b'; // Default slate-500
+          const typeColor = schema?.color || '#64748b';
 
           return (
             <button
@@ -145,7 +241,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
             </button>
           );
         })}
-        {filteredObjects.length === 0 && (
+        {filteredObjects.length === 0 && !createOption && (
           <div className="px-3 py-2 text-xs text-slate-400 italic">No matches found</div>
         )}
       </div>,
@@ -306,8 +402,10 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
       case 'document':
       case 'documents':
         const documentIds = Array.isArray(prop.value) ? prop.value : [prop.value].filter(Boolean);
+        // Look in both allObjects (from props) and createdObjects (local optimistic)
+        const allKnownObjects = [...allObjects, ...createdObjects];
         const linkedDocs = documentIds
-          .map(id => allObjects.find(o => o.id === id))
+          .map(id => allKnownObjects.find(o => o.id === id))
           .filter(Boolean) as NexusObject[];
 
         return (

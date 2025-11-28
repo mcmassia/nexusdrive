@@ -307,6 +307,19 @@ class AuthService {
       const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`);
       const data = await response.json();
 
+      if (!response.ok) {
+        console.error('❌ [Auth] Token check failed:', data);
+        if (data.error === 'invalid_token') {
+          console.warn('⚠️ [Auth] Token is invalid or expired.');
+        }
+        return;
+      }
+
+      if (!data.scope) {
+        console.error('❌ [Auth] Token info response missing scope:', data);
+        return;
+      }
+
       console.log('✅ [Auth] Token info:');
       console.log('  Email:', data.email);
       console.log('  Expires in:', data.expires_in, 'seconds');
@@ -421,11 +434,58 @@ class AuthService {
         }
       };
 
-      // Request token with select_account and consent prompt
-      console.log('➕ [Auth] Requesting add account...');
+      // Request new token with select_account prompt
+      console.log('🔄 [Auth] Requesting secondary account...');
+      this.tokenClient.requestAccessToken({ prompt: 'select_account', hint: '' });
+    });
+  }
+
+  /**
+   * Refresh token for a specific secondary account
+   * Tries silent refresh first, then falls back to prompt if needed (or returns null if silent only)
+   */
+  async refreshSecondaryToken(email: string, silent: boolean = true): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (this.isDemoMode) {
+        resolve('mock_refreshed_token');
+        return;
+      }
+
+      if (!this.tokenClient) {
+        if (window.google) {
+          this.initializeTokenClient();
+        } else {
+          resolve(null);
+          return;
+        }
+      }
+
+      if (!this.tokenClient) {
+        resolve(null);
+        return;
+      }
+
+      // Save original callback
+      const originalCallback = this.tokenClient.callback;
+
+      // Set temporary callback
+      this.tokenClient.callback = (response: any) => {
+        this.tokenClient.callback = originalCallback;
+
+        if (response && response.access_token) {
+          console.log(`✅ [Auth] Token refreshed for ${email}`);
+          resolve(response.access_token);
+        } else {
+          console.warn(`⚠️ [Auth] Failed to refresh token for ${email}`, response);
+          resolve(null);
+        }
+      };
+
+      // Request token
+      console.log(`🔄 [Auth] Refreshing token for ${email} (silent: ${silent})...`);
       this.tokenClient.requestAccessToken({
-        prompt: 'select_account consent',
-        scope: SCOPES
+        prompt: silent ? '' : 'consent',
+        hint: email
       });
     });
   }

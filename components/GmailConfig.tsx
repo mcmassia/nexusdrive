@@ -220,12 +220,46 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
                                     <div className="text-xs text-slate-500">{account.email}</div>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => handleRemoveAccount(account.email)}
-                                className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
-                            >
-                                <Trash2 size={16} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const newToken = await authService.refreshSecondaryToken(account.email, false);
+                                            if (newToken) {
+                                                const updatedAccounts = prefs.connectedAccounts?.map(a =>
+                                                    a.email === account.email ? { ...a, accessToken: newToken } : a
+                                                );
+                                                const updatedPrefs = { ...prefs, connectedAccounts: updatedAccounts };
+                                                await db.saveGmailPreferences(updatedPrefs);
+                                                setPrefs(updatedPrefs);
+                                                addNotification({
+                                                    type: 'success',
+                                                    message: lang === 'es' ? 'Token renovado' : 'Token refreshed',
+                                                    description: lang === 'es' ? 'La conexión se ha restablecido.' : 'Connection re-established.'
+                                                });
+                                            }
+                                        } catch (e) {
+                                            console.error('Manual refresh failed:', e);
+                                            addNotification({
+                                                type: 'error',
+                                                message: lang === 'es' ? 'Error' : 'Error',
+                                                description: lang === 'es' ? 'No se pudo renovar el token.' : 'Could not refresh token.'
+                                            });
+                                        }
+                                    }}
+                                    className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded-full transition-colors"
+                                    title={lang === 'es' ? 'Renovar conexión' : 'Refresh connection'}
+                                >
+                                    <RefreshCw size={16} />
+                                </button>
+                                <button
+                                    onClick={() => handleRemoveAccount(account.email)}
+                                    className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
+                                    title={lang === 'es' ? 'Desconectar' : 'Disconnect'}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
                         </div>
                     ))}
 

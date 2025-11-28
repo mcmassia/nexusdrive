@@ -320,9 +320,9 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                             <span
                               className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
                               style={{
-                                backgroundColor: typeColors[obj.type] ? `${typeColors[obj.type]}20` : '#f1f5f9',
-                                color: typeColors[obj.type] || '#64748b',
-                                borderColor: typeColors[obj.type] ? `${typeColors[obj.type]}40` : '#e2e8f0'
+                                backgroundColor: typeColors[obj.type] || '#64748b',
+                                color: '#ffffff',
+                                borderColor: 'transparent'
                               }}
                             >
                               {obj.type}
@@ -356,7 +356,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

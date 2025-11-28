@@ -49,14 +49,23 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         setNotifications((prev) => [...prev, newNotification]);
 
         if (notification.duration !== 0) {
-            const duration = notification.duration || 5000; // Default 5s
             setTimeout(() => {
                 removeNotification(id);
-            }, duration);
+            }, notification.duration || 5000);
         }
 
         return id;
     }, [removeNotification]);
+
+    // Listen for global events
+    React.useEffect(() => {
+        const handleGlobalNotify = (e: CustomEvent<Omit<Notification, 'id'>>) => {
+            addNotification(e.detail);
+        };
+
+        window.addEventListener('nexus-notify' as any, handleGlobalNotify as any);
+        return () => window.removeEventListener('nexus-notify' as any, handleGlobalNotify as any);
+    }, [addNotification]);
 
     const clearNotifications = useCallback(() => {
         setNotifications([]);

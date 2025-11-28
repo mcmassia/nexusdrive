@@ -1224,14 +1224,56 @@ class LocalDatabase {
         for (const account of prefs.connectedAccounts) {
           try {
             console.log(`[LocalDB] Syncing secondary account: ${account.email}`);
-            const token = account.accessToken?.trim();
+            let token = account.accessToken?.trim();
 
             // Debug scopes for this account
-            await authService.debugToken(token);
+            // await authService.debugToken(token);
 
-            const result = await gmailService.listMessages(query, limit, undefined, token);
-            const accountMsgs = result.messages.map(m => ({ ...m, _owner: account.email, _token: token }));
-            allMessages = [...allMessages, ...accountMsgs];
+            try {
+              const result = await gmailService.listMessages(query, limit, undefined, token);
+              const accountMsgs = result.messages.map(m => ({ ...m, _owner: account.email, _token: token }));
+              allMessages = [...allMessages, ...accountMsgs];
+            } catch (err: any) {
+              if (err.message === 'Token expired' || err.message.includes('401')) {
+                console.log(`[LocalDB] Token expired for ${account.email}, attempting refresh...`);
+                const newToken = await authService.refreshSecondaryToken(account.email, true); // Try silent first
+
+                if (newToken) {
+                  console.log(`[LocalDB] Refresh successful for ${account.email}, retrying sync...`);
+                  // Update token in DB
+                  account.accessToken = newToken;
+                  account.lastSync = new Date(); // Update sync time? Maybe not yet
+
+                  // Save updated prefs
+                  // We need to update the specific account in the array
+                  const accountIndex = prefs.connectedAccounts.findIndex(a => a.email === account.email);
+                  if (accountIndex !== -1) {
+                    prefs.connectedAccounts[accountIndex] = account;
+                    await this.saveGmailPreferences(prefs);
+                  }
+
+                  // Retry sync with new token
+                  const result = await gmailService.listMessages(query, limit, undefined, newToken);
+                  const accountMsgs = result.messages.map(m => ({ ...m, _owner: account.email, _token: newToken }));
+                  allMessages = [...allMessages, ...accountMsgs];
+                } else {
+                  console.error(`[LocalDB] Failed to refresh token for ${account.email}`);
+                  // Notify user to reconnect
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('nexus-notify', {
+                      detail: {
+                        type: 'error',
+                        message: 'Gmail Sync Error',
+                        description: `Could not refresh token for ${account.email}. Please reconnect in Settings.`,
+                        duration: 10000 // 10 seconds
+                      }
+                    }));
+                  }
+                }
+              } else {
+                throw err;
+              }
+            }
           } catch (e) {
             console.error(`[LocalDB] Error syncing account ${account.email}:`, e);
           }

@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo, Image as ImageIcon, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo, Image as ImageIcon, Trash2, Maximize2, Minimize2, ChevronRight, Minus } from 'lucide-react';
 import { db } from '../services/db';
 import { NexusObject, NexusType, TagConfig } from '../types';
 
@@ -31,6 +31,11 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUserEditing, setIsUserEditing] = useState(false);
   const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
+
+  // Link Modal State
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [savedSelection, setSavedSelection] = useState<Range | null>(null);
 
   // Parse natural date expressions
   const parseDateExpression = (expr: string): NexusObject | null => {
@@ -197,6 +202,23 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         }
       } else if (e.key === 'Escape') {
         setMenuOpen(false);
+      }
+    } else {
+      // Handle Tab for Indentation
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          execCommand('outdent');
+        } else {
+          execCommand('indent');
+        }
+      }
+
+      // Handle Link (Cmd+K)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent global search
+        insertLink();
       }
     }
   };
@@ -423,6 +445,65 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     }
   };
 
+  const insertToggle = () => {
+    const details = document.createElement('details');
+    details.className = 'nexus-toggle mb-4 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden group';
+
+    const summary = document.createElement('summary');
+    summary.className = 'cursor-pointer p-2 bg-slate-50 dark:bg-slate-800/50 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors list-none flex items-center gap-2 text-slate-800 dark:text-slate-200 select-none';
+    summary.innerHTML = '<span class="toggle-icon transition-transform duration-200 inline-block">▶</span> Toggle Title';
+
+    const content = document.createElement('div');
+    content.className = 'p-4 bg-white dark:bg-transparent border-t border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
+    content.innerHTML = '<p>Toggle content...</p>';
+
+    details.appendChild(summary);
+    details.appendChild(content);
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      range.insertNode(details);
+
+      // Add a paragraph after to allow continuing typing
+      const p = document.createElement('p');
+      p.innerHTML = '<br>';
+      range.setStartAfter(details);
+      range.insertNode(p);
+
+      range.collapse(false);
+      triggerChange();
+    }
+  };
+
+  const insertHorizontalRule = () => {
+    execCommand('insertHorizontalRule');
+  };
+
+  const insertLink = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      setSavedSelection(selection.getRangeAt(0));
+      setLinkUrl('');
+      setLinkModalOpen(true);
+    }
+  };
+
+  const confirmLink = () => {
+    if (savedSelection) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(savedSelection);
+
+      if (linkUrl) {
+        execCommand('createLink', linkUrl);
+      }
+
+      setLinkModalOpen(false);
+      setSavedSelection(null);
+    }
+  };
+
   // Colorize mentions on mount and content change
   useEffect(() => {
     const colorizeMentions = async () => {
@@ -512,30 +593,39 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
         // Unordered List
         if (lineText === '*' || lineText === '-') {
+          // Delete the trigger text first
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 2); // "- " is 2 chars
+          rangeToDelete.setEnd(textNode, cursorPos);
+          rangeToDelete.deleteContents();
+
           execCommand('insertUnorderedList');
-          const newRange = document.createRange();
-          newRange.selectNodeContents(textNode);
-          newRange.deleteContents();
           triggerChange();
           return;
         }
 
         // Ordered List
         if (lineText === '1.') {
+          // Delete the trigger text first
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 3); // "1. " is 3 chars
+          rangeToDelete.setEnd(textNode, cursorPos);
+          rangeToDelete.deleteContents();
+
           execCommand('insertOrderedList');
-          const newRange = document.createRange();
-          newRange.selectNodeContents(textNode);
-          newRange.deleteContents();
           triggerChange();
           return;
         }
 
         // Blockquote
         if (lineText === '>') {
+          // Delete the trigger text first
+          const rangeToDelete = document.createRange();
+          rangeToDelete.setStart(textNode, cursorPos - 2); // "> " is 2 chars
+          rangeToDelete.setEnd(textNode, cursorPos);
+          rangeToDelete.deleteContents();
+
           execCommand('formatBlock', '<blockquote>');
-          const newRange = document.createRange();
-          newRange.selectNodeContents(textNode);
-          newRange.deleteContents();
           triggerChange();
           return;
         }
@@ -919,6 +1009,18 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         <button onClick={() => execCommand('formatBlock', '<pre>')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Code Block">
           <Code size={18} />
         </button>
+
+        <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+        <button onClick={insertLink} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Insert Link (Cmd+K)">
+          <Link size={18} />
+        </button>
+        <button onClick={insertToggle} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Insert Toggle Section">
+          <ChevronRight size={18} />
+        </button>
+        <button onClick={insertHorizontalRule} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Horizontal Rule">
+          <Minus size={18} />
+        </button>
       </div>
 
       {/* Editor */}
@@ -994,6 +1096,42 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           </button>
         </div>
       )}
+      {/* Link Modal */}
+      {linkModalOpen && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 p-4 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 flex gap-2 items-center min-w-[300px]">
+          <input
+            autoFocus
+            type="text"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') confirmLink();
+              if (e.key === 'Escape') {
+                setLinkModalOpen(false);
+                setSavedSelection(null);
+              }
+            }}
+            placeholder="https://example.com"
+            className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={confirmLink}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {/* Editor Styles */}
+      <style>{`
+        details.nexus-toggle[open] > summary > .toggle-icon {
+          transform: rotate(90deg);
+        }
+        details.nexus-toggle > summary::-webkit-details-marker {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 };

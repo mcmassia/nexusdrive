@@ -3,7 +3,7 @@ import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
 import BacklinksPanel from './BacklinksPanel';
-import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
@@ -243,16 +243,55 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-400">{isSaving ? t.saving : t.synced}</span>
-                    <button onClick={handleAutoTag} className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors" title="AI Auto-Tag">
-                        <Sparkles size={18} />
+
+                    <button
+                        onClick={handleAutoTag}
+                        className="flex items-center gap-2 px-3 py-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors text-sm font-medium"
+                        title="AI Auto-Tag"
+                    >
+                        <Sparkles size={16} />
+                        <span className="hidden sm:inline">Auto-Tag</span>
                     </button>
-                    <button onClick={handleSave} className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors">
-                        <Save size={16} /> {t.save}
+
+                    <button
+                        onClick={async () => {
+                            const updated = { ...currentObject, pinned: !currentObject.pinned };
+                            await db.saveObject(updated);
+                            setCurrentObject(updated);
+                            onSave(updated); // Propagate change
+                        }}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium ${currentObject.pinned ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        title={currentObject.pinned ? (lang === 'es' ? 'Desfijar' : 'Unpin') : (lang === 'es' ? 'Fijar' : 'Pin')}
+                    >
+                        <Pin size={16} fill={currentObject.pinned ? "currentColor" : "none"} />
+                        <span className="hidden sm:inline">{lang === 'es' ? (currentObject.pinned ? 'Fijado' : 'Fijar') : (currentObject.pinned ? 'Pinned' : 'Pin')}</span>
                     </button>
-                    <button onClick={handleDelete} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}>
-                        <Trash2 size={18} />
+
+                    <button
+                        onClick={handleSave}
+                        className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
+                    >
+                        <Save size={16} />
+                        <span className="hidden sm:inline">{t.save}</span>
                     </button>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">{t.close}</button>
+
+                    <button
+                        onClick={handleDelete}
+                        className="flex items-center gap-2 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors text-sm font-medium"
+                        title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}
+                    >
+                        <Trash2 size={16} />
+                        <span className="hidden sm:inline">{lang === 'es' ? 'Borrar' : 'Delete'}</span>
+                    </button>
+
+                    <button
+                        onClick={onClose}
+                        className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
+                        title={t.close}
+                    >
+                        <X size={16} />
+                        <span className="hidden sm:inline">{t.close}</span>
+                    </button>
                 </div>
             </div>
 

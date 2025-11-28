@@ -309,17 +309,24 @@ const App: React.FC = () => {
 
     // Daily Note Logic
     let finalTitle = title;
-    if (type === NexusType.DAILY_NOTE) {
+    // Check for both enum value and potential schema string mismatch
+    if (type === NexusType.DAILY_NOTE || (type as string) === 'DailyNote') {
       const today = new Date();
       const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
 
       // Check if a Daily note with this date already exists
-      const existingNote = objects.find(o => o.type === NexusType.DAILY_NOTE && o.title === dateStr);
+      const existingNote = objects.find(o => (o.type === NexusType.DAILY_NOTE || (o.type as string) === 'DailyNote') && o.title === dateStr);
 
       if (existingNote) {
         finalTitle = 'Untitled';
       } else {
         finalTitle = dateStr;
+      }
+
+      // Auto-populate Date property if it exists in metadata
+      const datePropIndex = metadata.findIndex(p => p.key === 'date' || p.label === 'Date' || p.label === 'Fecha');
+      if (datePropIndex !== -1) {
+        metadata[datePropIndex].value = dateStr;
       }
     }
 
@@ -586,7 +593,7 @@ const App: React.FC = () => {
 
               <div className="flex-1 w-0 relative min-w-0 overflow-hidden">
                 {currentView === 'dashboard' && (
-                  <Dashboard onNavigate={setSelectedObject} lang={lang} objects={objects} />
+                  <Dashboard onNavigate={setSelectedObject} lang={lang} objects={objects} onRefresh={loadData} />
                 )}
 
                 {

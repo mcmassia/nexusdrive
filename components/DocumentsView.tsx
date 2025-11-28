@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { NexusObject, NexusType } from '../types';
-import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon } from 'lucide-react';
+import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon, Pin } from 'lucide-react';
 import { db } from '../services/db';
 import { TYPE_CONFIG } from '../constants';
 
@@ -76,6 +76,11 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
 
         // Sort
         const sorted = [...filtered].sort((a, b) => {
+            // Always put pinned items first if sorting by date or default
+            if (a.pinned !== b.pinned) {
+                return a.pinned ? -1 : 1;
+            }
+
             switch (sortBy) {
                 case 'date-desc':
                     return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
@@ -141,6 +146,13 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
             newSet.add(id);
         }
         setSelectedIds(newSet);
+    };
+
+    const handlePin = async (e: React.MouseEvent, doc: NexusObject) => {
+        e.stopPropagation();
+        const updated = { ...doc, pinned: !doc.pinned };
+        await db.saveObject(updated);
+        if (onRefresh) onRefresh();
     };
 
     const handleBulkDelete = async () => {
@@ -360,6 +372,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                                 className="rounded border-slate-300"
                                             />
                                         </th>
+                                        <th className="w-10 px-2 py-3"></th> {/* Pin column */}
                                         <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">{lang === 'es' ? 'Título' : 'Title'}</th>
                                         <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">{lang === 'es' ? 'Tipo' : 'Type'}</th>
                                         <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">{lang === 'es' ? 'Etiquetas' : 'Tags'}</th>
@@ -382,6 +395,14 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                                     }}
                                                     className="rounded border-slate-300"
                                                 />
+                                            </td>
+                                            <td className="px-2 py-3">
+                                                <button
+                                                    onClick={(e) => handlePin(e, obj)}
+                                                    className={`p-1 transition-colors ${obj.pinned ? 'text-blue-500' : 'text-slate-300 hover:text-blue-500'}`}
+                                                >
+                                                    <Pin size={14} fill={obj.pinned ? "currentColor" : "none"} />
+                                                </button>
                                             </td>
                                             <td className="px-4 py-3" onClick={() => onSelectObject(obj)}>
                                                 <div className="flex items-center gap-2">
@@ -434,6 +455,16 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                             className="rounded border-slate-300"
                                             onClick={(e) => e.stopPropagation()}
                                         />
+                                    </div>
+
+                                    {/* Pin Button */}
+                                    <div className="absolute top-3 right-3 z-10">
+                                        <button
+                                            onClick={(e) => handlePin(e, obj)}
+                                            className={`p-1 transition-opacity ${obj.pinned ? 'text-blue-500 opacity-100' : 'text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100'}`}
+                                        >
+                                            <Pin size={16} fill={obj.pinned ? "currentColor" : "none"} />
+                                        </button>
                                     </div>
 
                                     <div onClick={() => onSelectObject(obj)} className="cursor-pointer p-5 flex flex-col h-full">

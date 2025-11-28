@@ -16,6 +16,7 @@ interface DriveFile {
     name: string;
     mimeType: string;
     modifiedTime: string;
+    webViewLink?: string;
     appProperties?: Record<string, string>;
     properties?: Record<string, string>;
 }
@@ -224,7 +225,7 @@ class DriveService {
         // Create metadata
         const typeFolderId = await this.getOrCreateTypeFolder(obj.type);
         const metadata = {
-            name: `${obj.title}.gdoc`,
+            name: obj.title,
             mimeType: 'application/vnd.google-apps.document',
             parents: [typeFolderId],
             appProperties: {
