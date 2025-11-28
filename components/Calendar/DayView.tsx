@@ -103,7 +103,18 @@ const DayView: React.FC<DayViewProps> = ({ currentDate, events, onNavigate, lang
                     {lang === 'es' ? 'Todo el día' : 'All day'}
                 </div>
                 <div className="flex-1 p-1 space-y-1 bg-slate-50/30 dark:bg-slate-900/30">
-                    {events.filter(e => !e.start.dateTime).map(event => (
+                    {events.filter(e => {
+                        if (e.start.dateTime) return false;
+                        if (!e.start.date) return false;
+
+                        // Parse YYYY-MM-DD manually
+                        const [y, m, d] = e.start.date.split('-').map(Number);
+                        const eDate = new Date(y, m - 1, d);
+
+                        return eDate.getDate() === currentDate.getDate() &&
+                            eDate.getMonth() === currentDate.getMonth() &&
+                            eDate.getFullYear() === currentDate.getFullYear();
+                    }).map(event => (
                         <div
                             key={event.id}
                             onClick={(e) => {
@@ -118,7 +129,7 @@ const DayView: React.FC<DayViewProps> = ({ currentDate, events, onNavigate, lang
                         >
                             {event.isDocument && (
                                 <span
-                                    className="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
+                                    className="inline-block w-1.5 h-1.5 rounded-full mr-1"
                                     style={{ backgroundColor: getTypeColor(event.nexusType) }}
                                 />
                             )}

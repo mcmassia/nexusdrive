@@ -120,13 +120,57 @@ const WeekView: React.FC<WeekViewProps> = ({ currentDate, events, onNavigate, la
                 </div>
                 {days.map((day, i) => {
                     const dayEvents = events.filter(e => {
-                        const eDate = new Date(e.start.dateTime || e.start.date!);
-                        return eDate.getDate() === day.getDate() &&
-                            eDate.getMonth() === day.getMonth() &&
-                            eDate.getFullYear() === day.getFullYear();
+                        let start: Date;
+                        let end: Date;
+
+                        if (e.start.dateTime) {
+                            // Timed event: only show if it starts on this day
+                            start = new Date(e.start.dateTime);
+                            return start.getDate() === day.getDate() &&
+                                start.getMonth() === day.getMonth() &&
+                                start.getFullYear() === day.getFullYear();
+                        } else if (e.start.date) {
+                            // All-day event: show if day is within [start, end)
+                            const [y, m, d] = e.start.date.split('-').map(Number);
+                            start = new Date(y, m - 1, d);
+
+                            if (e.end.date) {
+                                const [ey, em, ed] = e.end.date.split('-').map(Number);
+                                end = new Date(ey, em - 1, ed);
+                            } else {
+                                // Fallback if no end date (shouldn't happen for Google events)
+                                end = new Date(start);
+                                end.setDate(end.getDate() + 1);
+                            }
+
+                            // Check overlap: day >= start && day < end
+                            // Normalize day to 00:00:00
+                            const currentDay = new Date(day);
+                            currentDay.setHours(0, 0, 0, 0);
+
+                            return currentDay >= start && currentDay < end;
+                        }
+                        return false;
                     });
 
-                    const allDayEvents = dayEvents.filter(e => !e.start.dateTime);
+                    const allDayEvents = dayEvents.filter(e => !e.start.dateTime).sort((a, b) => {
+                        // Sort by:
+                        // 1. Start Date (earlier first)
+                        // 2. Duration (longer first)
+                        // 3. Title (alphabetical)
+
+                        const startA = new Date(a.start.date!).getTime();
+                        const startB = new Date(b.start.date!).getTime();
+                        if (startA !== startB) return startA - startB;
+
+                        const endA = a.end.date ? new Date(a.end.date).getTime() : startA + 86400000;
+                        const endB = b.end.date ? new Date(b.end.date).getTime() : startB + 86400000;
+                        const durA = endA - startA;
+                        const durB = endB - startB;
+                        if (durA !== durB) return durB - durA; // Longer first
+
+                        return (a.summary || '').localeCompare(b.summary || '');
+                    });
 
                     return (
                         <div key={i} className="flex-1 border-r border-slate-200 dark:border-slate-800 p-1 space-y-1 bg-slate-50/30 dark:bg-slate-900/30">
@@ -172,7 +216,16 @@ const WeekView: React.FC<WeekViewProps> = ({ currentDate, events, onNavigate, la
                     {/* Days columns */}
                     {days.map((day, i) => {
                         const dayEvents = events.filter(e => {
-                            const eDate = new Date(e.start.dateTime || e.start.date!);
+                            let eDate: Date;
+                            if (e.start.dateTime) {
+                                eDate = new Date(e.start.dateTime);
+                            } else if (e.start.date) {
+                                const [y, m, d] = e.start.date.split('-').map(Number);
+                                eDate = new Date(y, m - 1, d);
+                            } else {
+                                return false;
+                            }
+
                             return eDate.getDate() === day.getDate() &&
                                 eDate.getMonth() === day.getMonth() &&
                                 eDate.getFullYear() === day.getFullYear();

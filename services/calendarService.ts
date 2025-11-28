@@ -24,8 +24,8 @@ export interface CalendarEvent {
 }
 
 class CalendarService {
-    private getHeaders() {
-        const token = authService.getAccessToken();
+    private getHeaders(accessToken?: string) {
+        const token = accessToken || authService.getAccessToken();
         if (!token) throw new Error('No access token available');
         return {
             'Authorization': `Bearer ${token}`,
@@ -36,7 +36,7 @@ class CalendarService {
     /**
    * List all available calendars with colors
    */
-    async listCalendars(): Promise<{ id: string; summary: string; primary?: boolean; backgroundColor?: string; foregroundColor?: string }[]> {
+    async listCalendars(accessToken?: string): Promise<{ id: string; summary: string; primary?: boolean; backgroundColor?: string; foregroundColor?: string }[]> {
         if (authService.isInDemoMode()) {
             return [
                 { id: 'primary', summary: 'Personal', primary: true, backgroundColor: '#4285F4', foregroundColor: '#ffffff' },
@@ -47,7 +47,7 @@ class CalendarService {
         try {
             const response = await fetch(
                 'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-                { headers: this.getHeaders() }
+                { headers: this.getHeaders(accessToken) }
             );
 
             if (!response.ok) {
@@ -71,7 +71,7 @@ class CalendarService {
     /**
      * List upcoming events from specified calendars
      */
-    async listEvents(timeMin?: string, timeMax?: string, calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] = [{ id: 'primary' }]): Promise<CalendarEvent[]> {
+    async listEvents(timeMin?: string, timeMax?: string, calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] = [{ id: 'primary' }], accessToken?: string): Promise<CalendarEvent[]> {
         if (authService.isInDemoMode()) {
             console.log('Mocking listEvents in demo mode');
             return [];
@@ -91,7 +91,7 @@ class CalendarService {
 
                 const response = await fetch(
                     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?${params.toString()}`,
-                    { headers: this.getHeaders() }
+                    { headers: this.getHeaders(accessToken) }
                 );
 
                 if (response.ok) {
@@ -114,7 +114,8 @@ class CalendarService {
         } catch (error) {
             console.error('Error listing calendar events:', error);
             if (error instanceof Error && error.message.includes('403')) {
-                alert('Access denied to Google Calendar. Please Log Out and Log In again to grant permissions.');
+                // Only alert if it's the primary account, or handle gracefully
+                console.warn('Access denied to Google Calendar for one of the accounts.');
             }
             return [];
         }

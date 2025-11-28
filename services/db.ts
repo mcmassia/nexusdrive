@@ -298,13 +298,82 @@ class LocalDatabase {
 
       // Get selected calendars with colors
       const prefs = await this.getCalendarPreferences();
+      const gmailPrefs = await this.getGmailPreferences();
+
       const selectedCalendars = prefs.calendars.length > 0 ? prefs.calendars : [{ id: 'primary' }];
 
       const now = new Date();
       const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(); // Previous month
       const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString(); // Next 3 months
 
-      const events = await calendarService.listEvents(timeMin, timeMax, selectedCalendars);
+      let allEvents: any[] = [];
+      const primaryEmail = authService.getUser()?.email;
+
+      // Group calendars by ownerEmail
+      // If ownerEmail is missing (legacy), assume primary if not found in secondary accounts
+      const calendarsByAccount: Record<string, typeof selectedCalendars> = {};
+
+      // Initialize with primary
+      if (primaryEmail) {
+        calendarsByAccount[primaryEmail] = [];
+      }
+
+      for (const cal of selectedCalendars) {
+        const owner = (cal as any).ownerEmail || primaryEmail;
+        if (owner) {
+          if (!calendarsByAccount[owner]) calendarsByAccount[owner] = [];
+          calendarsByAccount[owner].push(cal);
+        }
+      }
+
+      // 1. Sync Primary Account
+      if (primaryEmail && calendarsByAccount[primaryEmail]?.length > 0) {
+        try {
+          const primaryEvents = await calendarService.listEvents(timeMin, timeMax, calendarsByAccount[primaryEmail]);
+          // Inject account email and calendar summary
+          const enrichedPrimary = primaryEvents.map(e => {
+            const cal = calendarsByAccount[primaryEmail].find(c => c.id === e.calendarId);
+            return {
+              ...e,
+              accountEmail: primaryEmail,
+              calendarSummary: cal?.summary || 'Primary'
+            };
+          });
+          allEvents = [...allEvents, ...enrichedPrimary];
+        } catch (e) {
+          console.error('[LocalDB] Error syncing primary calendar:', e);
+        }
+      }
+
+      // 2. Sync Secondary Accounts
+      if (gmailPrefs?.connectedAccounts) {
+        for (const account of gmailPrefs.connectedAccounts) {
+          const accountCalendars = calendarsByAccount[account.email];
+          if (accountCalendars && accountCalendars.length > 0 && account.accessToken) {
+            try {
+              console.log(`[LocalDB] Syncing calendar for ${account.email}`);
+              const accountEvents = await calendarService.listEvents(timeMin, timeMax, accountCalendars, account.accessToken);
+              // Inject account email and calendar summary
+              const enrichedAccount = accountEvents.map(e => {
+                const cal = accountCalendars.find(c => c.id === e.calendarId);
+                return {
+                  ...e,
+                  accountEmail: account.email,
+                  calendarSummary: cal?.summary || 'Calendar'
+                };
+              });
+              allEvents = [...allEvents, ...enrichedAccount];
+            } catch (err: any) {
+              console.error(`[LocalDB] Error syncing calendar for ${account.email}:`, err);
+              // Handle token refresh if needed (similar to Gmail sync)
+              if (err.message?.includes('401') || err.message === 'Token expired') {
+                // Attempt refresh logic here if desired, or rely on Gmail sync to refresh it
+                console.warn(`[LocalDB] Token might be expired for ${account.email}`);
+              }
+            }
+          }
+        }
+      }
 
       const tx = this.db.transaction('calendar_events', 'readwrite');
       const store = tx.objectStore('calendar_events');
@@ -313,21 +382,21 @@ class LocalDatabase {
       // Ideally we should match IDs, but for now let's just clear all and re-add to ensure deleted events are gone.
       await store.clear();
 
-      for (const event of events) {
+      for (const event of allEvents) {
         if (event.id) {
           await store.put(event);
         }
       }
 
       await tx.done;
-      console.log(`📅 [LocalDB] Synced ${events.length} calendar events`);
+      console.log(`📅 [LocalDB] Synced ${allEvents.length} calendar events total`);
 
     } catch (error) {
       console.error('[LocalDB] Calendar sync failed:', error);
     }
   }
 
-  async getCalendarPreferences(): Promise<{ id: string; calendars: { id: string; backgroundColor?: string; foregroundColor?: string }[] }> {
+  async getCalendarPreferences(): Promise<{ id: string; calendars: { id: string; summary?: string; backgroundColor?: string; foregroundColor?: string }[] }> {
     if (!this.db) return { id: 'default', calendars: [{ id: 'primary' }] };
     const prefs = await this.db.get('calendar_preferences', 'default') as any;
 

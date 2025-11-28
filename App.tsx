@@ -23,6 +23,9 @@ import { NotificationUI } from './components/NotificationUI';
 import { GlobalErrorHandler } from './components/GlobalErrorHandler';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+import EventDetailsModal from './components/Calendar/EventDetailsModal';
+import { CalendarEvent } from './services/calendarService';
+
 // Development helper: Expose db and gmailService to window for console testing
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
   (window as any).db = db;
@@ -45,6 +48,7 @@ const App: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
+  const [viewEvent, setViewEvent] = useState<any | null>(null);
 
 
   // Navigation History State
@@ -118,6 +122,19 @@ const App: React.FC = () => {
     }
     return 'es'; // Default to Spanish
   });
+
+  // Initial Load
+  useEffect(() => {
+    loadData();
+
+    // Auto-sync calendar events to ensure fresh data
+    db.syncCalendarEvents().then(() => {
+      console.log('📅 [App] Calendar sync completed');
+      // Reload data to reflect changes
+      loadData();
+    }).catch(err => console.error('📅 [App] Calendar sync failed:', err));
+
+  }, []);
 
   // Persist Language
   useEffect(() => {
@@ -739,6 +756,7 @@ const App: React.FC = () => {
                 objects={objects}
                 lang={lang}
                 onNavigate={setSelectedObject}
+                onEventClick={(event) => setViewEvent(event)}
               />
             </main>
 
@@ -754,6 +772,38 @@ const App: React.FC = () => {
                 />
               )
             }
+
+            {/* Event Details Modal (from RightPanel) */}
+            {viewEvent && (
+              <EventDetailsModal
+                event={viewEvent}
+                onClose={() => setViewEvent(null)}
+                onCreateDocument={async (event, type) => {
+                  // Create document logic (simplified version of CalendarView's logic)
+                  const newObject: NexusObject = {
+                    id: `${type.toLowerCase()}-${event.id || Date.now()}`,
+                    title: event.summary || (lang === 'es' ? 'Sin título' : 'Untitled'),
+                    type: type,
+                    content: `<h1>${event.summary}</h1><p>${event.description || ''}</p>`,
+                    lastModified: new Date(),
+                    tags: [],
+                    metadata: [
+                      { key: 'date', label: 'Date', value: event.start.dateTime || event.start.date, type: 'date' },
+                      { key: 'googleEventId', label: 'Google Event ID', value: event.id, type: 'text' }
+                    ]
+                  };
+                  await db.saveObject(newObject);
+                  setViewEvent(null);
+                  setSelectedObject(newObject);
+                }}
+                onOpenDocument={(id) => {
+                  db.getObjectById(id).then(obj => {
+                    if (obj) setSelectedObject(obj);
+                  });
+                }}
+                lang={lang}
+              />
+            )}
           </div >
         </div >
       </NotificationProvider>

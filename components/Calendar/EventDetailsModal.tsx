@@ -126,6 +126,26 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({
                                 </div>
                             </div>
                         )}
+
+                        {/* Calendar & Account Info */}
+                        <div className="flex items-start gap-3 text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <Calendar size={18} className="mt-0.5 shrink-0" />
+                            <div className="text-sm">
+                                <div className="font-medium mb-1">{lang === 'es' ? 'Calendario' : 'Calendar'}</div>
+                                <div className="flex flex-col gap-1">
+                                    {(event as any).calendarSummary && (
+                                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                            {(event as any).calendarSummary}
+                                        </div>
+                                    )}
+                                    {(event as any).accountEmail && (
+                                        <div className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-600 dark:text-slate-400 inline-block self-start">
+                                            {(event as any).accountEmail}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Actions */}

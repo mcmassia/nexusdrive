@@ -8,9 +8,10 @@ interface RightPanelProps {
     objects: NexusObject[];
     lang: 'en' | 'es';
     onNavigate: (obj: NexusObject) => void;
+    onEventClick?: (event: any) => void;
 }
 
-const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) => {
+const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate, onEventClick }) => {
     const [isOpen, setIsOpen] = useState(true);
     const [viewDate, setViewDate] = useState(new Date());
     // Initialize with local date instead of UTC
@@ -19,6 +20,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
     const [selectedDate, setSelectedDate] = useState(initialDate);
     const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
     const [dailyObjects, setDailyObjects] = useState<NexusObject[]>([]);
+    const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
     const [typeSchemas, setTypeSchemas] = useState<TypeSchema[]>([]);
 
     const t = TRANSLATIONS[lang];
@@ -60,6 +62,16 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
             });
         });
         setDailyObjects(matches);
+
+        // Fetch Calendar Events for this date
+        const fetchEvents = async () => {
+            const start = new Date(dateStr + 'T00:00:00');
+            const end = new Date(dateStr + 'T23:59:59');
+            const events = await db.getCalendarEvents(start, end);
+            setCalendarEvents(events);
+        };
+        fetchEvents();
+
     }, [selectedDate, objects]);
 
     const getCalendarDays = () => {
@@ -141,11 +153,47 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
                     </div>
 
                     {/* Daily Events */}
-                    <div>
+                    <div className="mb-6">
                         <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
                             {t.eventsFor} {new Date(selectedDate + 'T00:00:00').toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric' })}
                         </h3>
+
+                        {/* Calendar Events Section */}
+                        {calendarEvents.length > 0 && (
+                            <div className="space-y-2 mb-4">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Calendar</h4>
+                                {calendarEvents.map(event => (
+                                    <div
+                                        key={event.id}
+                                        onClick={() => onEventClick?.(event)}
+                                        className="w-full text-left p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-blue-400 dark:hover:border-blue-600 transition-all group relative overflow-hidden cursor-pointer"
+                                    >
+                                        <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: event.backgroundColor || '#3b82f6' }}></div>
+                                        <div className="pl-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                                    {event.start.dateTime
+                                                        ? new Date(event.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                        : (lang === 'es' ? 'Todo el día' : 'All Day')}
+                                                </span>
+                                                {(event as any).accountEmail && (
+                                                    <span className="text-[9px] text-slate-400 truncate max-w-[80px]" title={(event as any).accountEmail}>
+                                                        {(event as any).accountEmail.split('@')[0]}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2">
+                                                {event.summary}
+                                            </h4>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Nexus Objects Section */}
                         <div className="space-y-2">
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Documents</h4>
                             {dailyObjects.length > 0 ? (
                                 dailyObjects.map(obj => (
                                     <button
@@ -164,7 +212,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ objects, lang, onNavigate }) =>
                                 ))
                             ) : (
                                 <div className="text-xs text-slate-400 italic text-center py-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
-                                    {t.emptyCalendar}
+                                    No documents
                                 </div>
                             )}
                         </div>

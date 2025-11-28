@@ -399,7 +399,16 @@ ${attendeesList}
                         <div className="flex-1 grid grid-cols-7 grid-rows-6">
                             {days.map((dayObj, idx) => {
                                 const dayEvents = displayedEvents.filter(e => {
-                                    const eDate = new Date(e.start.dateTime || e.start.date!);
+                                    let eDate: Date;
+                                    if (e.start.dateTime) {
+                                        eDate = new Date(e.start.dateTime);
+                                    } else if (e.start.date) {
+                                        const [y, m, d] = e.start.date.split('-').map(Number);
+                                        eDate = new Date(y, m - 1, d);
+                                    } else {
+                                        return false;
+                                    }
+
                                     return eDate.getDate() === dayObj.date.getDate() &&
                                         eDate.getMonth() === dayObj.date.getMonth() &&
                                         eDate.getFullYear() === dayObj.date.getFullYear();
