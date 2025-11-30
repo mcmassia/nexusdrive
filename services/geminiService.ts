@@ -106,6 +106,14 @@ export class GeminiService {
     } catch (error: any) {
       console.error("Gemini API Error:", error);
       const msg = error.message || String(error);
+
+      // Handle Quota Exceeded
+      if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota')) {
+        return lang === 'es'
+          ? 'Has alcanzado el límite de cuota de la API de Gemini. Por favor, verifica tu plan de facturación o intenta más tarde.'
+          : 'You have exceeded your Gemini API quota. Please check your billing plan or try again later.';
+      }
+
       return lang === 'es'
         ? `Error conectando con NexusAI: ${msg}`
         : `Error connecting to NexusAI: ${msg}`;
