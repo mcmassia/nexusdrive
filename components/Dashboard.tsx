@@ -5,6 +5,7 @@ import RichEditor from './RichEditor';
 import { Clock, Trash2, Pin } from 'lucide-react';
 import { TRANSLATIONS } from '../constants';
 import EmailsPanel from './EmailsPanel';
+import { useSettings } from './SettingsContext';
 
 interface DashboardProps {
   onNavigate: (obj: NexusObject) => void;
@@ -19,6 +20,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects, onRefr
   const [pinnedDocs, setPinnedDocs] = useState<NexusObject[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [typeSchemas, setTypeSchemas] = useState<TypeSchema[]>([]);
+  const { isFeatureEnabled } = useSettings();
+  const isFocusMode = isFeatureEnabled('focus_mode');
 
   const t = TRANSLATIONS[lang];
 
@@ -129,10 +132,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects, onRefr
       {/* 2-COLUMN LAYOUT: Emails | Recent Docs + Daily Note */}
       <div className="w-full flex gap-4 p-4 overflow-hidden">
 
-        {/* LEFT COLUMN: EMAILS PANEL */}
-        <div className="flex-shrink-0 transition-all duration-300">
-          <EmailsPanel lang={lang} onNavigate={onNavigate} />
-        </div>
+        {/* LEFT COLUMN: EMAILS PANEL - Hidden in Focus Mode */}
+        {!isFocusMode && (
+          <div className="flex-shrink-0 transition-all duration-300">
+            <EmailsPanel lang={lang} onNavigate={onNavigate} />
+          </div>
+        )}
 
         {/* RIGHT COLUMN: RECENT DOCS + DAILY NOTE */}
         <div className="flex-1 flex flex-col gap-4 overflow-hidden min-w-0">

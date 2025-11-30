@@ -16,7 +16,7 @@ import { NexusObject, NexusType, GraphNode, GraphLink, UserProfile, TypeSchema, 
 import { db } from './services/db';
 import { authService } from './services/authService';
 import { driveService } from './services/driveService';
-import { Search, Plus, LogOut, FileText, User, Briefcase, Calendar, Sparkles, RefreshCw, Menu, X } from 'lucide-react';
+import { Search, Plus, LogOut, FileText, User, Briefcase, Calendar, Sparkles, RefreshCw, Menu, X, Maximize2 } from 'lucide-react';
 import { TYPE_CONFIG, TRANSLATIONS } from './constants';
 import { NotificationProvider } from './components/NotificationContext';
 import { NotificationUI } from './components/NotificationUI';
@@ -42,7 +42,7 @@ import { useSettings } from './components/SettingsContext';
 const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<UserProfile | null>(authService.getUser());
-  const { isFeatureEnabled } = useSettings();
+  const { isFeatureEnabled, rejectFeature, toggleFeature, prefs } = useSettings();
 
   // App State
   const [currentView, setCurrentView] = useState<'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags' | 'tasks'>('dashboard');
@@ -52,6 +52,7 @@ const App: React.FC = () => {
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
   const [viewEvent, setViewEvent] = useState<any | null>(null);
+  const [isFeatureMenuOpen, setIsFeatureMenuOpen] = useState(false);
 
   const isFocusMode = isFeatureEnabled('focus_mode');
 
@@ -407,18 +408,20 @@ const App: React.FC = () => {
         <GlobalErrorHandler />
         <NotificationUI />
         <div className="flex h-screen w-full bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-          <Sidebar
-            currentView={currentView}
-            onViewChange={setCurrentView}
-            onTypeFilter={setFilterType}
-            onObjectSelect={setSelectedObject}
-            isDarkMode={isDarkMode}
-            toggleTheme={() => setIsDarkMode(!isDarkMode)}
-            lang={lang}
-            setLang={setLang}
-            objects={objects}
-            availableTypes={availableTypes}
-          />
+          {!isFocusMode && (
+            <Sidebar
+              currentView={currentView}
+              onViewChange={setCurrentView}
+              onTypeFilter={setFilterType}
+              onObjectSelect={setSelectedObject}
+              isDarkMode={isDarkMode}
+              toggleTheme={() => setIsDarkMode(!isDarkMode)}
+              lang={lang}
+              setLang={setLang}
+              objects={objects}
+              availableTypes={availableTypes}
+            />
+          )}
 
           <div className="flex-1 flex flex-col relative">
             {/* Top Header - Sticky */}
@@ -471,6 +474,69 @@ const App: React.FC = () => {
                 >
                   <Search size={20} />
                 </button>
+
+                {/* Feature Toggle Menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFeatureMenuOpen(!isFeatureMenuOpen)}
+                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                    title={lang === 'es' ? 'Gestionar Mejoras' : 'Manage Features'}
+                  >
+                    <Sparkles size={20} className={prefs.appliedImprovements.length > 0 ? "text-purple-500" : ""} />
+                  </button>
+
+                  {isFeatureMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setIsFeatureMenuOpen(false)}></div>
+                      <div className="absolute right-0 top-12 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50">
+                          <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {lang === 'es' ? 'Mejoras Activas' : 'Active Features'}
+                          </h3>
+                        </div>
+
+                        <div className="max-h-64 overflow-y-auto">
+                          {prefs.appliedImprovements.length === 0 ? (
+                            <div className="p-4 text-center text-sm text-slate-400 italic">
+                              {lang === 'es' ? 'No hay mejoras instaladas.' : 'No features installed.'}
+                            </div>
+                          ) : (
+                            prefs.appliedImprovements.map(featureId => {
+                              const isEnabled = isFeatureEnabled(featureId);
+                              return (
+                                <div key={featureId} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0">
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 capitalize">
+                                    {featureId.replace(/_/g, ' ')}
+                                  </span>
+                                  <button
+                                    onClick={() => toggleFeature(featureId)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${isEnabled ? 'bg-purple-600' : 'bg-slate-200 dark:bg-slate-600'}`}
+                                  >
+                                    <span
+                                      className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isEnabled ? 'translate-x-5' : 'translate-x-1'}`}
+                                    />
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        <div className="p-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30">
+                          <button
+                            onClick={() => {
+                              setCurrentView('settings');
+                              setIsFeatureMenuOpen(false);
+                            }}
+                            className="w-full text-center text-xs text-purple-600 dark:text-purple-400 hover:underline py-1"
+                          >
+                            {lang === 'es' ? 'Ir a la Tienda de Mejoras' : 'Go to Feature Store'}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* NEW BUTTON & MENU */}
                 {/* Sync Button */}
@@ -758,13 +824,28 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              {/* Right Panel - Always Visible */}
-              <RightPanel
-                objects={objects}
-                lang={lang}
-                onNavigate={setSelectedObject}
-                onEventClick={(event) => setViewEvent(event)}
-              />
+              {/* Right Panel - Always Visible unless Focus Mode */}
+              {!isFocusMode && (
+                <RightPanel
+                  objects={objects}
+                  lang={lang}
+                  onNavigate={setSelectedObject}
+                  onEventClick={(event) => setViewEvent(event)}
+                />
+              )}
+
+              {/* Focus Mode Exit Button */}
+              {isFocusMode && (
+                <div className="absolute bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4">
+                  <button
+                    onClick={() => rejectFeature('focus_mode')}
+                    className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 font-medium"
+                  >
+                    <Maximize2 size={16} />
+                    {lang === 'es' ? 'Salir del Modo Enfoque' : 'Exit Focus Mode'}
+                  </button>
+                </div>
+              )}
             </main>
 
             {

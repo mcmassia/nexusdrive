@@ -7,6 +7,7 @@ interface SettingsContextType {
     isFeatureEnabled: (featureId: string) => boolean;
     applyFeature: (featureId: string) => Promise<void>;
     rejectFeature: (featureId: string) => Promise<void>;
+    toggleFeature: (featureId: string) => Promise<void>;
     refreshPrefs: () => Promise<void>;
 }
 
@@ -25,6 +26,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const isFeatureEnabled = (featureId: string) => {
+        // If enabledImprovements is defined, check it. Otherwise fallback to applied (backward compat)
+        if (prefs.enabledImprovements) {
+            return prefs.enabledImprovements.includes(featureId);
+        }
         return prefs.appliedImprovements.includes(featureId);
     };
 
@@ -32,10 +37,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const newPrefs = { ...prefs };
         // Remove from rejected if it was there
         newPrefs.rejectedImprovements = newPrefs.rejectedImprovements.filter(id => id !== featureId);
+
         // Add to applied if not present
         if (!newPrefs.appliedImprovements.includes(featureId)) {
             newPrefs.appliedImprovements.push(featureId);
         }
+
+        // Enable by default when applied
+        if (!newPrefs.enabledImprovements) newPrefs.enabledImprovements = [];
+        if (!newPrefs.enabledImprovements.includes(featureId)) {
+            newPrefs.enabledImprovements.push(featureId);
+        }
+
         await db.saveAppPreferences(newPrefs);
         setPrefs(newPrefs);
     };
@@ -44,6 +57,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const newPrefs = { ...prefs };
         // Remove from applied if it was there
         newPrefs.appliedImprovements = newPrefs.appliedImprovements.filter(id => id !== featureId);
+
+        // Remove from enabled
+        if (newPrefs.enabledImprovements) {
+            newPrefs.enabledImprovements = newPrefs.enabledImprovements.filter(id => id !== featureId);
+        }
+
         // Add to rejected if not present
         if (!newPrefs.rejectedImprovements.includes(featureId)) {
             newPrefs.rejectedImprovements.push(featureId);
@@ -52,8 +71,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPrefs(newPrefs);
     };
 
+    const toggleFeature = async (featureId: string) => {
+        const newPrefs = { ...prefs };
+        if (!newPrefs.enabledImprovements) newPrefs.enabledImprovements = [...newPrefs.appliedImprovements];
+
+        if (newPrefs.enabledImprovements.includes(featureId)) {
+            newPrefs.enabledImprovements = newPrefs.enabledImprovements.filter(id => id !== featureId);
+        } else {
+            newPrefs.enabledImprovements.push(featureId);
+        }
+        await db.saveAppPreferences(newPrefs);
+        setPrefs(newPrefs);
+    };
+
     return (
-        <SettingsContext.Provider value={{ prefs, isFeatureEnabled, applyFeature, rejectFeature, refreshPrefs }}>
+        <SettingsContext.Provider value={{ prefs, isFeatureEnabled, applyFeature, rejectFeature, toggleFeature, refreshPrefs }}>
             {children}
         </SettingsContext.Provider>
     );

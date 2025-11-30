@@ -186,11 +186,14 @@ export interface GmailPreferences {
   }[];
   syncQuery?: string; // e.g. "label:inbox"
   lastSync?: Date;
+  autoSync?: boolean;
+  syncFrequency?: number; // in minutes
 }
 
 export interface AppPreferences {
   appliedImprovements: string[]; // IDs of applied improvements
   rejectedImprovements: string[]; // IDs of rejected improvements
+  enabledImprovements?: string[]; // IDs of currently active improvements (subset of applied)
 }
 
 export interface ConnectedAccount {
