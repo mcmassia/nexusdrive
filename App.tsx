@@ -37,9 +37,12 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
 }
 
 
+import { useSettings } from './components/SettingsContext';
+
 const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<UserProfile | null>(authService.getUser());
+  const { isFeatureEnabled } = useSettings();
 
   // App State
   const [currentView, setCurrentView] = useState<'dashboard' | 'graph' | 'documents' | 'calendar' | 'list' | 'settings' | 'tags' | 'tasks'>('dashboard');
@@ -49,6 +52,10 @@ const App: React.FC = () => {
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
   const [viewEvent, setViewEvent] = useState<any | null>(null);
+
+  const isFocusMode = isFeatureEnabled('focus_mode');
+
+  // ... (rest of state)
 
 
   // Navigation History State

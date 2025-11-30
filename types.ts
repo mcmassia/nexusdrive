@@ -177,20 +177,28 @@ export interface EmailData {
   labels: string[];
 }
 
+export interface GmailPreferences {
+  connectedAccounts: {
+    email: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+  }[];
+  syncQuery?: string; // e.g. "label:inbox"
+  lastSync?: Date;
+}
+
+export interface AppPreferences {
+  appliedImprovements: string[]; // IDs of applied improvements
+  rejectedImprovements: string[]; // IDs of rejected improvements
+}
+
 export interface ConnectedAccount {
   email: string;
   name: string;
   picture: string;
   accessToken: string;
   lastSync?: Date;
-}
-
-export interface GmailPreferences {
-  id: string;
-  selectedAccounts: string[]; // Legacy, kept for compatibility
-  connectedAccounts?: ConnectedAccount[]; // New multi-account support
-  syncQuery: string;
-  lastSyncTime?: Date;
   // Advanced Config
   syncLabels?: string[]; // e.g., ['INBOX', 'IMPORTANT']
   syncFrequency?: number; // in minutes

@@ -1,24 +1,24 @@
 import React, { useState, useMemo } from 'react';
-import { NexusObject, NexusType } from '../types';
-import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon, Pin } from 'lucide-react';
+import { NexusObject, NexusType, TypeSchema } from '../types';
+import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon, Pin, Mail, Tag, List, MoreVertical } from 'lucide-react';
 import { db } from '../services/db';
 import { TYPE_CONFIG } from '../constants';
+import { useSettings } from './SettingsContext';
 
 interface DocumentsViewProps {
     objects: NexusObject[];
-    onSelectObject: (obj: NexusObject) => void;
+    onObjectClick: (obj: NexusObject) => void;
     onRefresh?: () => void;
     activeTypeFilter?: string | null;
     lang: 'en' | 'es';
     availableTypes: TypeSchema[];
+    filterType?: NexusType | null;
 }
 
 type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc' | 'type';
 type ViewMode = 'table' | 'cards';
 
-import { TypeSchema } from '../types';
-
-const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, onRefresh, activeTypeFilter, lang, availableTypes }) => {
+const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, onRefresh, activeTypeFilter, lang, availableTypes, filterType }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState<NexusType | 'all'>(
         (activeTypeFilter as NexusType) || 'all'
@@ -404,16 +404,16 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                                     <Pin size={14} fill={obj.pinned ? "currentColor" : "none"} />
                                                 </button>
                                             </td>
-                                            <td className="px-4 py-3" onClick={() => onSelectObject(obj)}>
+                                            <td className="px-4 py-3" onClick={() => onObjectClick(obj)}>
                                                 <div className="flex items-center gap-2">
                                                     {getTypeIcon(obj.type)}
                                                     <span className="font-medium text-slate-900 dark:text-slate-100">{obj.title}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3" onClick={() => onSelectObject(obj)}>
+                                            <td className="px-4 py-3" onClick={() => onObjectClick(obj)}>
                                                 <span className="text-sm text-slate-600 dark:text-slate-400">{obj.type}</span>
                                             </td>
-                                            <td className="px-4 py-3" onClick={() => onSelectObject(obj)}>
+                                            <td className="px-4 py-3" onClick={() => onObjectClick(obj)}>
                                                 <div className="flex flex-wrap gap-1">
                                                     {obj.tags.slice(0, 3).map(tag => (
                                                         <span key={tag} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs">
@@ -427,7 +427,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3" onClick={() => onSelectObject(obj)}>
+                                            <td className="px-4 py-3" onClick={() => onObjectClick(obj)}>
                                                 <span className="text-sm text-slate-600 dark:text-slate-400">{formatDate(obj.lastModified)}</span>
                                             </td>
                                         </tr>
@@ -467,7 +467,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onSelectObject, 
                                         </button>
                                     </div>
 
-                                    <div onClick={() => onSelectObject(obj)} className="cursor-pointer p-5 flex flex-col h-full">
+                                    <div onClick={() => onObjectClick(obj)} className="cursor-pointer p-5 flex flex-col h-full">
                                         <div className="flex items-start justify-between mb-2 pl-6">
                                             <span
                                                 className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"

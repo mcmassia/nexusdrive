@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Database, Mail, Settings as SettingsIcon } from 'lucide-react';
+import { Database, Mail, Settings as SettingsIcon, Sparkles } from 'lucide-react';
 import TypeManager from './TypeManager';
 import GmailConfig from './GmailConfig';
+import ImprovementsPanel from './ImprovementsPanel';
 
 import { NexusObject } from '../types';
 
@@ -11,7 +12,7 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
-    const [activeTab, setActiveTab] = useState<'types' | 'gmail'>('types');
+    const [activeTab, setActiveTab] = useState<'types' | 'gmail' | 'improvements'>('types');
 
     return (
         <div className="flex h-full bg-slate-50 dark:bg-black/10">
@@ -48,6 +49,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
                         <Mail size={20} />
                         {lang === 'es' ? 'Integración Gmail' : 'Gmail Integration'}
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('improvements')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'improvements'
+                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                    >
+                        <Sparkles size={20} className={activeTab === 'improvements' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+                        {lang === 'es' ? 'Mejoras' : 'Improvements'}
+                    </button>
                 </nav>
             </div>
 
@@ -55,6 +67,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
             <div className="flex-1 overflow-y-auto">
                 {activeTab === 'types' && <TypeManager objects={objects} />}
                 {activeTab === 'gmail' && <GmailConfig lang={lang} />}
+                {activeTab === 'improvements' && <ImprovementsPanel lang={lang} />}
             </div>
         </div>
     );

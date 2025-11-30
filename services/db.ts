@@ -1,10 +1,12 @@
 import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
-import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig, EmailData, GmailPreferences } from '../types';
+import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig, EmailData, GmailPreferences, AppPreferences } from '../types';
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
 import { calendarService } from './calendarService';
 import { vectorService } from './vectorService';
+
+
 
 // IndexedDB Schema
 interface NexusDB extends DBSchema {
@@ -59,6 +61,10 @@ interface NexusDB extends DBSchema {
     key: string; // 'default'
     value: GmailPreferences;
   };
+  app_preferences: {
+    key: string; // 'default'
+    value: AppPreferences;
+  };
   embeddings: {
     key: string; // object ID
     value: { id: string; vector: number[] };
@@ -91,7 +97,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 8, {
+      this.db = await openDB<NexusDB>('nexus-db', 9, { // Bump version to 9
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -155,6 +161,11 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('embeddings')) {
             db.createObjectStore('embeddings', { keyPath: 'id' });
             console.log('[LocalDB] Created embeddings store');
+          }
+          // NEW in v2.5: App preferences store
+          if (!db.objectStoreNames.contains('app_preferences')) {
+            db.createObjectStore('app_preferences', { keyPath: 'id' });
+            console.log('[LocalDB] Created app_preferences store');
           }
         },
       });
@@ -1569,6 +1580,18 @@ class LocalDatabase {
 
     await this.saveObject(newDoc);
     return docId;
+  }
+
+  // App Preferences Methods
+  async getAppPreferences(): Promise<AppPreferences> {
+    if (!this.db) return { appliedImprovements: [], rejectedImprovements: [] };
+    const prefs = await this.db.get('app_preferences', 'default');
+    return prefs || { appliedImprovements: [], rejectedImprovements: [] };
+  }
+
+  async saveAppPreferences(prefs: AppPreferences): Promise<void> {
+    if (!this.db) return;
+    await this.db.put('app_preferences', { ...prefs, id: 'default' } as any);
   }
 }
 

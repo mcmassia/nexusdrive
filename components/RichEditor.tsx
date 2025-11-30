@@ -1,8 +1,8 @@
-
-import React, { useRef, useEffect, useState } from 'react';
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo, Image as ImageIcon, Trash2, Maximize2, Minimize2, ChevronRight, Minus } from 'lucide-react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Quote, Code, Link, Hash, AlignLeft, AlignCenter, AlignRight, AlignJustify, Palette, Type, Table, Undo, Redo, Image as ImageIcon, Trash2, Maximize2, Minimize2, ChevronRight, Minus, Sparkles, X } from 'lucide-react';
 import { db } from '../services/db';
 import { NexusObject, NexusType, TagConfig } from '../types';
+import { useSettings } from './SettingsContext';
 
 interface RichEditorProps {
   initialContent: string;
@@ -18,6 +18,9 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const editorRef = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
 
+  // Settings
+  const { isFeatureEnabled } = useSettings();
+
   // Menu State
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuType, setMenuType] = useState<'mention' | 'tag' | null>(null);
@@ -31,6 +34,17 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUserEditing, setIsUserEditing] = useState(false);
   const [tagConfigs, setTagConfigs] = useState<Map<string, TagConfig>>(new Map());
+
+  // Debounce helper
+  const debounce = (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  };
+
+
 
   // Link Modal State
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -49,38 +63,38 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       case 'today':
       case 'hoy':
         targetDate = today;
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
         break;
       case 'yesterday':
       case 'ayer':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() - 1);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
         break;
       case 'tomorrow':
       case 'mañana':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + 1);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
         break;
       case 'anteayer':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() - 2);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
         break;
       case 'pasado mañana':
         targetDate = new Date(today);
         targetDate.setDate(today.getDate() + 2);
-        title = `Daily Note: ${targetDate.toISOString().split('T')[0]} `;
+        title = `Daily Note: ${targetDate.toISOString().split('T')[0]}`;
         break;
     }
 
     if (targetDate) {
       return {
-        id: `daily - ${targetDate.toISOString().split('T')[0]} `,
+        id: `daily-${targetDate.toISOString().split('T')[0]}`,
         title,
         type: NexusType.PAGE,
-        content: `< h1 > Daily Log: ${targetDate.toISOString().split('T')[0]}</h1 > <p>What's on your mind today?</p>`,
+        content: `<h1>Daily Log: ${targetDate.toISOString().split('T')[0]}</h1><p>What's on your mind today?</p>`,
         lastModified: targetDate,
         tags: ['daily-journal'],
         metadata: [{ key: 'date', label: 'Date', value: targetDate.toISOString().split('T')[0], type: 'date' }]
@@ -536,6 +550,10 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     setIsUserEditing(true);
     triggerChange(); // Capture normal typing
 
+    if (editorRef.current) {
+      // scanForLinks(range.startContainer); // Removed auto-scan
+    }
+
     // Reset user editing flag after a delay
     setTimeout(() => {
       setIsUserEditing(false);
@@ -553,7 +571,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       const cursorPos = range.startOffset;
 
       // Debugging
-      // console.log('handleInput:', { text, cursorPos, charCode: text.charCodeAt(cursorPos - 1) });
+      // console.log('handleInput:', {text, cursorPos, charCode: text.charCodeAt(cursorPos - 1) });
 
       // Check if we just typed a space (normal space 32 or nbsp 160)
       const isSpace = /\s|\u00A0/.test(text.charAt(cursorPos - 1));
@@ -849,7 +867,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           span.contentEditable = 'false'; // Prevent editing the timestamp
 
           // Insert after the task text
-          // We need to find the end of the task text. 
+          // We need to find the end of the task text.
           // The structure is: <input> Task Text <br> or <block>
           // We can insert it after the next text node?
 
