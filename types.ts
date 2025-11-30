@@ -88,6 +88,7 @@ export interface NexusObject {
   tags: string[];
   metadata: NexusProperty[];
   driveFileId?: string; // Google Drive file ID for linking
+  driveWebViewLink?: string; // Direct link to open in Drive
   extractedTasks?: NexusTask[];
   pinned?: boolean;
 }

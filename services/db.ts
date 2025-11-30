@@ -298,6 +298,47 @@ class LocalDatabase {
   }
 
   /**
+   * Sync objects from Local to Drive (Upload new files)
+   */
+  async syncToDrive() {
+    if (!this.db || authService.isInDemoMode()) return;
+
+    try {
+      const objects = await this.getObjects();
+      const unsynced = objects.filter(obj => !obj.driveFileId);
+
+      if (unsynced.length === 0) {
+        console.log('[LocalDB] No local files to upload to Drive');
+        return;
+      }
+
+      console.log(`[LocalDB] Found ${unsynced.length} local files to upload to Drive`);
+
+      for (const obj of unsynced) {
+        try {
+          console.log(`[LocalDB] Uploading ${obj.title} to Drive...`);
+          const result = await driveService.createObject(obj);
+
+          if (result && result.id) {
+            // Update local object with new Drive ID and Link
+            const updated = {
+              ...obj,
+              driveFileId: result.id,
+              driveWebViewLink: result.webViewLink
+            };
+            await this.db.put('objects', updated);
+            console.log(`[LocalDB] Uploaded ${obj.title} -> ${result.id}`);
+          }
+        } catch (err) {
+          console.error(`[LocalDB] Failed to upload ${obj.title}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error('[LocalDB] Sync to Drive failed:', error);
+    }
+  }
+
+  /**
    * Sync Calendar Events
    * Fetches events from Google Calendar and stores them in calendar_events store
    */
@@ -638,17 +679,17 @@ class LocalDatabase {
   /**
    * Save object (with Drive sync if enabled)
    */
-  async saveObject(updatedObject: NexusObject): Promise<void> {
+  async saveObject(updatedObject: NexusObject): Promise<NexusObject> {
     if (!this.db) {
       // Demo mode: just log
       console.log(`📝[LocalDB] Demo mode: Object ${updatedObject.id} saved(in -memory only)`);
-      return;
+      return updatedObject;
     }
 
     try {
       // Get existing object to check if it has a Drive file ID
       const existing = await this.db.get('objects', updatedObject.id);
-      const driveFileId = existing?.driveFileId;
+      let driveFileId = existing?.driveFileId;
 
       // Save to local DB
       await this.db.put('objects', { ...updatedObject, driveFileId });
@@ -720,15 +761,27 @@ class LocalDatabase {
           } else {
             // Create new file in Drive
             console.log(`📤[LocalDB] Creating new file in Drive...`);
-            const newFileId = await driveService.createObject(updatedObject);
-            console.log(`📝[LocalDB] Received Drive file ID: ${newFileId}`);
+            const result = await driveService.createObject(updatedObject);
 
-            // Update local DB with Drive file ID
-            const objWithDriveId = { ...updatedObject, driveFileId: newFileId };
-            await this.db.put('objects', objWithDriveId);
-            console.log(`✅[LocalDB] Created in Drive with ID: ${newFileId}`);
-            console.log(`📊[LocalDB] Saved object with driveFileId:`, objWithDriveId.driveFileId);
-            console.log(`🎉[LocalDB] Object synced! Check your Google Drive > Nexus folder`);
+            if (result && result.id) {
+              console.log(`📝[LocalDB] Received Drive file ID: ${result.id}`);
+
+              // Update local DB with Drive file ID and Link
+              driveFileId = result.id;
+              const objWithDriveId = {
+                ...updatedObject,
+                driveFileId: result.id,
+                driveWebViewLink: result.webViewLink
+              };
+
+              await this.db.put('objects', objWithDriveId);
+              console.log(`✅[LocalDB] Created in Drive with ID: ${result.id}`);
+              console.log(`📊[LocalDB] Saved object with driveFileId:`, objWithDriveId.driveFileId);
+              console.log(`🎉[LocalDB] Object synced! Check your Google Drive > Nexus folder`);
+
+              return objWithDriveId;
+            }
+            return updatedObject;
           }
         } catch (driveError) {
           console.error('❌ [LocalDB] Failed to sync to Drive:', driveError);
@@ -738,6 +791,8 @@ class LocalDatabase {
           // Continue - object is saved locally at least
         }
       }
+
+      return { ...updatedObject, driveFileId };
     } catch (error) {
       console.error('❌ [LocalDB] Failed to save object:', error);
       throw error;
@@ -1322,7 +1377,7 @@ class LocalDatabase {
                   console.log(`[LocalDB] Refresh successful for ${account.email}, retrying sync...`);
                   // Update token in DB
                   account.accessToken = newToken;
-                  account.lastSync = new Date(); // Update sync time? Maybe not yet
+                  account.accessToken = newToken;
 
                   // Save updated prefs
                   // We need to update the specific account in the array
@@ -1492,28 +1547,25 @@ class LocalDatabase {
   async getGmailPreferences(): Promise<GmailPreferences | null> {
     if (!this.db) {
       return {
-        id: 'default',
-        selectedAccounts: [],
+        connectedAccounts: [],
         syncQuery: '', // Empty query to avoid 403 errors
-        lastSyncTime: undefined
+        lastSync: undefined
       };
     }
 
     try {
       const prefs = await this.db.get('gmail_preferences', 'default');
       return prefs || {
-        id: 'default',
-        selectedAccounts: [],
+        connectedAccounts: [],
         syncQuery: '', // Empty query to avoid 403 errors
-        lastSyncTime: undefined
+        lastSync: undefined
       };
     } catch (error) {
       console.error('[LocalDB] Failed to get Gmail preferences:', error);
       return {
-        id: 'default',
-        selectedAccounts: [],
+        connectedAccounts: [],
         syncQuery: '', // Empty query to avoid 403 errors
-        lastSyncTime: undefined
+        lastSync: undefined
       };
     }
   }
@@ -1525,7 +1577,7 @@ class LocalDatabase {
     if (!this.db) return;
 
     try {
-      await this.db.put('gmail_preferences', { ...prefs, id: 'default' });
+      await this.db.put('gmail_preferences', { ...prefs });
       console.log('[LocalDB] Saved Gmail preferences');
     } catch (error) {
       console.error('[LocalDB] Failed to save Gmail preferences:', error);

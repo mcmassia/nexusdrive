@@ -180,7 +180,7 @@ class DriveService {
     /**
      * Create a new object in Drive as a Google Doc
      */
-    async createObject(obj: NexusObject): Promise<string> {
+    async createObject(obj: NexusObject): Promise<{ id: string, webViewLink?: string }> {
         const token = authService.getAccessToken();
 
         if (!token) {
@@ -253,7 +253,7 @@ class DriveService {
             closeDelim;
 
         const response = await this.fetchWithAuth(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType',
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink',
             {
                 method: 'POST',
                 headers: {
@@ -267,7 +267,7 @@ class DriveService {
         const fileId = fileData.id;
 
         console.log(`✅ [DriveService] Created document with ID: ${fileId}`);
-        return fileId;
+        return { id: fileId, webViewLink: fileData.webViewLink };
     }
 
     /**
@@ -376,7 +376,7 @@ class DriveService {
             console.log(`[DriveService] Fetching: https://www.googleapis.com/drive/v3/files/${fileId}`);
 
             // Get file metadata
-            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime,appProperties`;
+            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime,webViewLink,appProperties`;
             const metaResponse = await this.fetchWithAuth(metaUrl);
             const fileData = await metaResponse.json();
 
@@ -457,7 +457,8 @@ class DriveService {
                 title: fileData.name.replace('.gdoc', ''),
                 content: content,
                 lastModified: new Date(fileData.modifiedTime),
-                driveFileId: fileData.id // Update Drive file ID
+                driveFileId: fileData.id, // Update Drive file ID
+                driveWebViewLink: fileData.webViewLink // Map webViewLink
             };
         }
 
@@ -470,7 +471,8 @@ class DriveService {
             lastModified: new Date(fileData.modifiedTime),
             tags: [],
             metadata: [],
-            driveFileId: fileData.id
+            driveFileId: fileData.id,
+            driveWebViewLink: fileData.webViewLink // Map webViewLink
         };
 
         return obj;

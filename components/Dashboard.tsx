@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../services/db';
 import { NexusObject, TypeSchema } from '../types';
 import RichEditor from './RichEditor';
-import { Clock, Trash2, Pin } from 'lucide-react';
+import { Clock, Trash2, Pin, ExternalLink } from 'lucide-react';
 import { TRANSLATIONS } from '../constants';
 import EmailsPanel from './EmailsPanel';
 import { useSettings } from './SettingsContext';
+import { useNotification } from './NotificationContext';
 
 interface DashboardProps {
   onNavigate: (obj: NexusObject) => void;
@@ -15,6 +16,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects, onRefresh }) => {
+  const { addNotification } = useNotification();
   const [dailyNote, setDailyNote] = useState<NexusObject | null>(null);
   const [recentDocs, setRecentDocs] = useState<NexusObject[]>([]);
   const [pinnedDocs, setPinnedDocs] = useState<NexusObject[]>([]);
@@ -102,6 +104,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, lang, objects, onRefr
         >
           <Trash2 size={12} />
         </button>
+        <a
+          href={doc.driveWebViewLink || (doc.driveFileId ? `https://docs.google.com/document/d/${doc.driveFileId}/edit` : '#')}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!doc.driveFileId && !doc.driveWebViewLink) {
+              e.preventDefault();
+              addNotification({
+                type: 'warning',
+                message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                duration: 5000
+              });
+            }
+          }}
+          className={`p-1 transition-opacity ${(doc.driveFileId || doc.driveWebViewLink)
+              ? 'text-green-500 opacity-100'
+              : 'text-slate-300 hover:text-green-500 opacity-0 group-hover:opacity-100'
+            }`}
+          title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
+        >
+          <ExternalLink size={14} />
+        </a>
       </div>
       <div className="flex items-center justify-between">
         <span

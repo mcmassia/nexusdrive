@@ -3,7 +3,7 @@ import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
 import BacklinksPanel from './BacklinksPanel';
-import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate, ExternalLink } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
@@ -23,11 +23,22 @@ interface EditorProps {
 
 const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang, onNavigateToDocuments, onTagClick, onNavigate }) => {
     const t = TRANSLATIONS[lang];
+    const { addNotification } = useNotification();
     const [currentObject, setCurrentObject] = useState<NexusObject>(object);
     const [content, setContent] = useState(object.content);
     const [isSaving, setIsSaving] = useState(false);
     const [typeSchema, setTypeSchema] = useState<TypeSchema | undefined>(undefined);
     const [objects, setObjects] = useState<NexusObject[]>([]);
+
+    // Sync state with prop changes (e.g. after external save/sync)
+    useEffect(() => {
+        setCurrentObject(object);
+        // Only update content if it's different to avoid losing unsaved changes?
+        // Actually, if the parent updates the object, we should probably reflect it, 
+        // but we must be careful not to overwrite user typing if the update comes from a background sync.
+        // However, in this context, the update comes from `onSave` completion in App.tsx which updates `selectedObject`.
+        // So it is safe to update `currentObject` here.
+    }, [object]);
 
     const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);
     const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
@@ -320,7 +331,15 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400">{isSaving ? t.saving : t.synced}</span>
+                    <span className="text-xs text-slate-400">
+                        {isSaving
+                            ? t.saving
+                            : (currentObject.driveFileId
+                                ? t.synced
+                                : (lang === 'es' ? 'Solo Local' : 'Local Only')
+                            )
+                        }
+                    </span>
 
                     <button
                         onClick={handleAutoTag}
@@ -376,6 +395,32 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             )}
                         </div>
                     )}
+
+                    <a
+                        href={currentObject.driveWebViewLink || (currentObject.driveFileId ? `https://docs.google.com/document/d/${currentObject.driveFileId}/edit` : '#')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                            if (!currentObject.driveFileId && !currentObject.driveWebViewLink) {
+                                e.preventDefault();
+                                addNotification({
+                                    type: 'warning',
+                                    message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                                    description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                                    duration: 5000
+                                });
+                            }
+                        }}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
+                            ${(currentObject.driveFileId || currentObject.driveWebViewLink)
+                                ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                        title="Open in Drive"
+                    >
+                        <ExternalLink size={16} />
+                        <span className="hidden sm:inline">Drive</span>
+                    </a>
 
                     <button
                         onClick={handleSave}

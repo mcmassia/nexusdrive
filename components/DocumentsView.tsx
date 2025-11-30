@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { NexusObject, NexusType, TypeSchema } from '../types';
-import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon, Pin, Mail, Tag, List, MoreVertical } from 'lucide-react';
+import { Search, Filter, X, FileText, User, Calendar, Briefcase, ChevronDown, Trash2, Grid, Table as TableIcon, Pin, Mail, Tag, List, MoreVertical, ExternalLink } from 'lucide-react';
 import { db } from '../services/db';
 import { TYPE_CONFIG } from '../constants';
 import { useSettings } from './SettingsContext';
+import { useNotification } from './NotificationContext';
 
 interface DocumentsViewProps {
     objects: NexusObject[];
@@ -19,6 +20,7 @@ type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc' | 'type'
 type ViewMode = 'table' | 'cards';
 
 const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, onRefresh, activeTypeFilter, lang, availableTypes, filterType }) => {
+    const { addNotification } = useNotification();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState<NexusType | 'all'>(
         (activeTypeFilter as NexusType) || 'all'
@@ -403,6 +405,30 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                                                 >
                                                     <Pin size={14} fill={obj.pinned ? "currentColor" : "none"} />
                                                 </button>
+                                                <a
+                                                    href={obj.driveWebViewLink || (obj.driveFileId ? `https://docs.google.com/document/d/${obj.driveFileId}/edit` : '#')}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (!obj.driveFileId && !obj.driveWebViewLink) {
+                                                            e.preventDefault();
+                                                            addNotification({
+                                                                type: 'warning',
+                                                                message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                                                                description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                                                                duration: 5000
+                                                            });
+                                                        }
+                                                    }}
+                                                    className={`p-1 transition-colors ml-1 ${(obj.driveFileId || obj.driveWebViewLink)
+                                                            ? 'text-green-500 hover:text-green-600'
+                                                            : 'text-slate-300 hover:text-green-500'
+                                                        }`}
+                                                    title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
+                                                >
+                                                    <ExternalLink size={14} />
+                                                </a>
                                             </td>
                                             <td className="px-4 py-3" onClick={() => onObjectClick(obj)}>
                                                 <div className="flex items-center gap-2">
@@ -441,7 +467,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                             {filteredAndSortedObjects.map(obj => (
                                 <div
                                     key={obj.id}
-                                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all flex flex-col h-48 relative"
+                                    className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all flex flex-col h-48 relative group"
                                 >
                                     {/* Checkbox */}
                                     <div className="absolute top-3 left-3 z-10">
@@ -467,6 +493,33 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                                         </button>
                                     </div>
 
+                                    {/* Drive Button */}
+                                    <div className="absolute top-3 right-10 z-10">
+                                        <a
+                                            href={obj.driveWebViewLink || (obj.driveFileId ? `https://docs.google.com/document/d/${obj.driveFileId}/edit` : '#')}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!obj.driveFileId && !obj.driveWebViewLink) {
+                                                    e.preventDefault();
+                                                    addNotification({
+                                                        type: 'warning',
+                                                        message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                                                        description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                                                        duration: 5000
+                                                    });
+                                                }
+                                            }}
+                                            className={`p-1 transition-opacity ${(obj.driveFileId || obj.driveWebViewLink)
+                                                    ? 'text-green-500 opacity-100'
+                                                    : 'text-slate-300 hover:text-green-500 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                            title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
+                                        >
+                                            <ExternalLink size={16} />
+                                        </a>
+                                    </div>
                                     <div onClick={() => onObjectClick(obj)} className="cursor-pointer p-5 flex flex-col h-full">
                                         <div className="flex items-start justify-between mb-2 pl-6">
                                             <span
@@ -501,7 +554,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

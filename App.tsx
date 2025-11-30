@@ -269,6 +269,9 @@ const App: React.FC = () => {
       // We need to expose this as a public method in db.ts
       await db.syncFromDrive();
 
+      // Push local changes to Drive (Upload new files)
+      await db.syncToDrive();
+
       // Sync Calendar Events
       await db.syncCalendarEvents();
 
@@ -745,7 +748,7 @@ const App: React.FC = () => {
                   currentView === 'documents' && (
                     <DocumentsView
                       objects={objects}
-                      onSelectObject={(obj) => setSelectedObject(obj)}
+                      onObjectClick={(obj) => setSelectedObject(obj)}
                       onRefresh={loadData}
                       activeTypeFilter={filterType}
                       lang={lang}
@@ -801,8 +804,12 @@ const App: React.FC = () => {
                     <Editor
                       object={selectedObject}
                       onSave={async (obj) => {
-                        await db.saveObject(obj);
-                        loadData();
+                        const savedObj = await db.saveObject(obj);
+                        await loadData();
+                        // Update selectedObject with the returned object (which has driveFileId)
+                        if (savedObj) {
+                          setSelectedObject(savedObj);
+                        }
                       }}
                       onClose={() => setSelectedObject(null)}
                       lang={lang}
