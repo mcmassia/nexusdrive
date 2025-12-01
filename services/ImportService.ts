@@ -1,11 +1,14 @@
-import JSZip from 'jszip';
+import * as zip from '@zip.js/zip.js';
 import { marked } from 'marked';
 import { NexusObject, TypeSchema, NexusType } from '../types';
 
-interface ImportResult {
+export interface ImportResult {
     schemas: TypeSchema[];
     objects: NexusObject[];
     assets: Map<string, Blob>; // filename -> blob
+    totalProcessed?: number;
+    failedCount?: number;
+    skippedCount?: number;
 }
 
 interface FileInfo {
@@ -19,33 +22,151 @@ export class ImportService {
     private fileMap = new Map<string, FileInfo>();
     private assetMap = new Map<string, string>(); // originalName -> newName
 
-    async processZip(file: File): Promise<ImportResult> {
-        const zip = new JSZip();
-        const loadedZip = await zip.loadAsync(file);
+    async processZip(file: File, onProgress?: (status: string) => void, existingTitles?: Set<string>, overwrite: boolean = false): Promise<ImportResult> {
+        const reader = new zip.ZipReader(new zip.BlobReader(file));
+        const entries = await reader.getEntries();
+        console.log(`ZIP contains ${entries.length} entries.`);
+        if (entries.length > 0) {
+            console.log('First entry:', entries[0].filename);
+        }
 
-        const filesToProcess: { path: string; content: string; metadata: any }[] = [];
         const detectedSchemas = new Map<string, Set<string>>();
         const assets = new Map<string, Blob>();
 
-        // 1. Scan files
-        for (const [relativePath, zipEntry] of Object.entries(loadedZip.files)) {
-            if (zipEntry.dir) continue;
+        // Pass 1: Build File Map (Path -> ID)
+        onProgress?.(`Scanning ${entries.length} files...`);
+        this.fileMap.clear();
+        this.assetMap.clear();
 
-            // Ignore __MACOSX and hidden files
+        const mdEntries: zip.Entry[] = [];
+        let skippedCount = 0;
+
+        for (const entry of entries) {
+            // console.log('Entry:', entry.filename, 'Dir:', entry.directory); // Too verbose for large zips
+            if (entry.directory) continue;
+            // Normalize path to use forward slashes
+            const relativePath = entry.filename.replace(/\\/g, '/');
+
             if (relativePath.includes('__MACOSX') || relativePath.startsWith('.')) continue;
 
             if (relativePath.endsWith('.md')) {
-                const content = await zipEntry.async('string');
-                const { metadata, body } = this.parseFrontmatter(content);
+                const title = relativePath.split('/').pop()?.replace('.md', '') || 'Untitled';
 
+                // Check if already exists
+                if (!overwrite && existingTitles && existingTitles.has(title)) {
+                    console.log(`Skipping existing MD: ${title} (${relativePath})`);
+                    skippedCount++;
+                    continue;
+                }
+
+                console.log(`Adding MD to process: ${title} (${relativePath})`);
                 const id = crypto.randomUUID();
-                const title = metadata.title || relativePath.split('/').pop()?.replace('.md', '') || 'Untitled';
-                const type = metadata.type || 'Page';
+                this.fileMap.set(relativePath, { id, title, type: 'Notion', path: relativePath });
+                mdEntries.push(entry);
+            } else if (relativePath.endsWith('.html')) {
+                const title = relativePath.split('/').pop()?.replace('.html', '') || 'Untitled';
 
-                // Map file info
-                this.fileMap.set(relativePath, { id, title, type, path: relativePath });
+                // Check if already exists
+                if (!overwrite && existingTitles && existingTitles.has(title)) {
+                    console.log(`Skipping existing HTML: ${title} (${relativePath})`);
+                    skippedCount++;
+                    continue;
+                }
+
+                console.log(`Adding HTML to process: ${title} (${relativePath})`);
+                const id = crypto.randomUUID();
+                this.fileMap.set(relativePath, { id, title, type: 'Notion', path: relativePath });
+                mdEntries.push(entry);
+            } else {
+                // Asset
+                const ext = relativePath.split('.').pop() || '';
+                const name = relativePath.split('/').pop()?.replace(`.${ext}`, '') || 'asset';
+                const safeName = name.replace(/[^a-z0-9]/gi, '_');
+                // Use randomUUID to ensure uniqueness even if filenames are same (e.g. image.png in different folders)
+                const newName = `${safeName}_${crypto.randomUUID()}.${ext}`;
+                // Use full relative path as key to avoid collisions
+                this.assetMap.set(relativePath, newName);
+                // console.log(`Found asset: ${relativePath} -> ${newName}`);
+            }
+        }
+
+        // Pass 2: Process Content & Save Incrementally
+        let processedCount = 0;
+        let failedCount = 0;
+        const totalFiles = mdEntries.length;
+
+        console.log(`Found ${totalFiles} new Markdown/HTML files to process. Skipped ${skippedCount} existing files.`);
+
+        // Process Assets first or in parallel? 
+        // Let's process assets as we encounter them in the zip if we iterate all entries, 
+        // but we already filtered mdEntries.
+
+        // We need to process asset entries too.
+        // Let's iterate the original entries again or filter them earlier?
+        // We have assetMap which has keys.
+
+        // Better approach: Iterate all entries again or filter for assets
+        const assetEntries = entries.filter(e => {
+            const relativePath = e.filename.replace(/\\/g, '/');
+            return this.assetMap.has(relativePath) && !e.directory;
+        });
+
+        console.log(`Found ${assetEntries.length} assets to process.`);
+
+        // Save assets
+        for (const entry of assetEntries) {
+            try {
+                const relativePath = entry.filename.replace(/\\/g, '/');
+                const newName = this.assetMap.get(relativePath);
+                if (newName && (entry as any).getData) {
+                    const blob = await (entry as any).getData(new zip.BlobWriter());
+                    if (this.assetCallback) {
+                        await this.assetCallback(newName, blob, relativePath);
+                    }
+                }
+            } catch (e) {
+                console.error(`Failed to save asset ${entry.filename}`, e);
+            }
+        }
+
+        for (const entry of mdEntries) {
+            processedCount++;
+            if (processedCount % 10 === 0) {
+                onProgress?.(`Importing file ${processedCount}/${totalFiles}...`);
+            }
+
+            try {
+                // Read content as text
+                if (!(entry as any).getData) {
+                    console.warn(`Entry ${entry.filename} has no getData method.`);
+                    failedCount++;
+                    continue;
+                }
+
+                const content = await (entry as any).getData(new zip.TextWriter());
+
+                // Use normalized path for lookup
+                const normalizedPath = entry.filename.replace(/\\/g, '/');
+                const info = this.fileMap.get(normalizedPath)!;
+
+                let metadata, body;
+
+                if (normalizedPath.endsWith('.html')) {
+                    const result = this.parseHtmlContent(content, info);
+                    metadata = result.metadata;
+                    body = result.body;
+                } else {
+                    const result = this.parseFrontmatter(content);
+                    metadata = result.metadata;
+                    body = result.body;
+                }
+
+                // Update title/type from metadata if available
+                if (metadata.title) info.title = metadata.title;
+                if (metadata.type) info.type = metadata.type;
 
                 // Collect schema info
+                const type = info.type;
                 if (!detectedSchemas.has(type)) {
                     detectedSchemas.set(type, new Set());
                 }
@@ -55,33 +176,32 @@ export class ImportService {
                     }
                 });
 
-                filesToProcess.push({ path: relativePath, content: body, metadata });
-            } else {
-                // Asset file (image, pdf, etc.)
-                // Assuming assets are in Images/ or similar, or just treat all non-md as assets
-                const blob = await zipEntry.async('blob');
-                const ext = relativePath.split('.').pop() || '';
-                const name = relativePath.split('/').pop()?.replace(`.${ext}`, '') || 'asset';
-                // Sanitize name
-                const safeName = name.replace(/[^a-z0-9]/gi, '_');
-                const newName = `${safeName}_${Date.now()}.${ext}`;
+                // Convert to NexusObject
+                const nexusObj = this.convertToNexusObject(info, body, metadata);
 
-                this.assetMap.set(relativePath.split('/').pop()!, newName);
-                assets.set(newName, blob);
+                // Save immediately to DB
+                if (this.saveCallback) {
+                    await this.saveCallback(nexusObj);
+                } else {
+                    console.warn('No saveCallback defined, object not saved:', nexusObj.title);
+                }
+
+            } catch (e) {
+                console.error(`Failed to process ${entry.filename}`, e);
+                failedCount++;
             }
         }
 
-        // 2. Generate Schemas
+        await reader.close();
+
+        // Generate Schemas
         const schemas: TypeSchema[] = [];
         detectedSchemas.forEach((props, type) => {
             const properties = Array.from(props).map(key => {
                 let propType: any = 'text';
                 if (key.includes('date') || key.includes('fecha') || key === 'createdAt') propType = 'date';
-                if (key === 'tags') propType = 'multiselect'; // Treat tags as multiselect for now? Or specific tags type?
+                if (key === 'tags') propType = 'multiselect';
                 if (key === 'organizaciones' || key === 'personasInvolucradas') propType = 'multiselect';
-
-                // Check values in files to refine type? (Skipped for simplicity)
-
                 return {
                     key,
                     label: key.charAt(0).toUpperCase() + key.slice(1),
@@ -90,7 +210,6 @@ export class ImportService {
                 };
             });
 
-            // Ensure date property
             if (!properties.find(p => p.key === 'date')) {
                 properties.push({ key: 'date', label: 'Date', type: 'date', required: false });
             }
@@ -102,12 +221,35 @@ export class ImportService {
             });
         });
 
-        // 3. Process Content & Convert
-        const objects: NexusObject[] = filesToProcess.map(file => {
-            const info = this.fileMap.get(file.path)!;
+        return { schemas, objects: [], assets, totalProcessed: processedCount, failedCount, skippedCount };
+    }
 
+    // Callback for saving objects incrementally
+    public saveCallback?: (obj: NexusObject) => Promise<void>;
+    public assetCallback?: (id: string, blob: Blob, originalName: string) => Promise<void>;
+
+    private resolvePath(basePath: string, relativePath: string): string {
+        const stack = basePath.split('/');
+        stack.pop(); // Remove current filename
+
+        const parts = relativePath.split('/');
+        for (const part of parts) {
+            if (part === '.') continue;
+            if (part === '..') {
+                if (stack.length > 0) stack.pop();
+            } else {
+                stack.push(part);
+            }
+        }
+        return stack.join('/');
+    }
+
+    private convertToNexusObject(info: FileInfo, content: string, metadata: any): NexusObject {
+        let htmlContent = content;
+
+        if (!info.path.endsWith('.html')) {
             // Pre-process WikiLinks
-            let processedContent = file.content.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, (match, link, text) => {
+            let processedContent = content.replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, (match, link, text) => {
                 const display = text || link;
                 return `[${display}](${link})`;
             });
@@ -124,22 +266,27 @@ export class ImportService {
                 }
 
                 // Resolve internal link
+                // Try exact match first (if absolute path in zip)
                 let target = this.fileMap.get(decodedPath);
 
+                // Try resolving relative path
                 if (!target) {
-                    target = this.fileMap.get(decodedPath + '.md');
+                    const resolved = this.resolvePath(info.path, decodedPath);
+                    target = this.fileMap.get(resolved);
                 }
 
+                // Try adding .md or .html extension
                 if (!target) {
-                    // Search by basename (ignoring extension and case)
-                    // decodedPath might be "Folder/File" or just "File"
-                    // Normalize to NFC to handle Mac/Windows accent differences
-                    const searchName = decodedPath.split('/').pop()?.replace('.md', '').normalize('NFC').toLowerCase();
+                    const resolved = this.resolvePath(info.path, decodedPath);
+                    target = this.fileMap.get(resolved + '.md') || this.fileMap.get(resolved + '.html');
+                }
 
+                // Fallback: Search by filename (legacy behavior, risky but helpful)
+                if (!target) {
+                    const searchName = decodedPath.split('/').pop()?.replace(/\.(md|html)$/, '').normalize('NFC').toLowerCase();
                     if (searchName) {
                         for (const [p, i] of this.fileMap.entries()) {
-                            // Normalize file path from map as well
-                            const infoName = p.split('/').pop()?.replace('.md', '').normalize('NFC').toLowerCase();
+                            const infoName = p.split('/').pop()?.replace(/\.(md|html)$/, '').normalize('NFC').toLowerCase();
                             if (infoName === searchName) {
                                 target = i;
                                 break;
@@ -149,7 +296,6 @@ export class ImportService {
                 }
 
                 if (target) {
-                    // Add nexus-mention class for interactivity
                     return `<a data-object-id="${target.id}" class="nexus-mention text-blue-600 hover:underline cursor-pointer">${text}</a>`;
                 }
 
@@ -157,16 +303,12 @@ export class ImportService {
             };
 
             renderer.image = ({ href, title, text }) => {
-                const basename = href.split('/').pop()!;
-                const newName = this.assetMap.get(basename);
+                const decodedHref = decodeURIComponent(href);
+                // Resolve path relative to current file
+                const resolvedPath = this.resolvePath(info.path, decodedHref);
 
-                // For client-side blob URLs, we'll need to handle this later.
-                // For now, store the filename. The UI will need to resolve this to a Blob URL or we upload to public folder?
-                // Since this is client-side, we can't write to public folder.
-                // We will store assets in IndexedDB or use ObjectURLs.
-                // Let's assume we store them in IDB and serve via a custom handler or just use base64?
-                // Base64 is easiest for small apps but heavy.
-                // Let's use a placeholder and handle asset saving in the main component.
+                // Look up in assetMap using full resolved path
+                const newName = this.assetMap.get(resolvedPath);
 
                 if (newName) {
                     return `<img src="asset://${newName}" alt="${text || ''}" class="max-w-full h-auto rounded-lg my-4" />`;
@@ -175,45 +317,109 @@ export class ImportService {
             };
 
             marked.use({ renderer });
-            const htmlContent = marked.parse(processedContent) as string;
+            htmlContent = marked.parse(processedContent) as string;
+        }
 
-            // Convert Metadata
-            const nexusMetadata: any[] = [];
-            Object.entries(file.metadata).forEach(([key, value]) => {
-                if (key === 'type' || key === 'title' || key === 'tags') return;
+        // Convert Metadata
+        const nexusMetadata: any[] = [];
+        Object.entries(metadata).forEach(([key, value]) => {
+            if (key === 'type' || key === 'title' || key === 'tags') return;
 
-                let val = value;
-                let type = 'text';
+            let val = value;
+            let type = 'text';
 
-                if (key === 'fecha' && typeof value === 'string') {
-                    val = value.split(' - ')[0];
-                    type = 'date';
-                } else if (Array.isArray(value)) {
-                    type = 'multiselect';
-                } else if (typeof value === 'string') {
-                    if (value.startsWith('http')) type = 'url';
-                    else if (value.includes('@') && value.includes('.')) type = 'email';
-                }
-
-                nexusMetadata.push({ key, label: key, value: val, type });
-            });
-
-            if (!nexusMetadata.find(m => m.key === 'date')) {
-                nexusMetadata.push({ key: 'date', label: 'Date', value: new Date().toISOString(), type: 'date' });
+            if (key === 'fecha' && typeof value === 'string') {
+                val = value.split(' - ')[0];
+                type = 'date';
+            } else if (Array.isArray(value)) {
+                type = 'multiselect';
+            } else if (typeof value === 'string') {
+                if (value.startsWith('http')) type = 'url';
+                else if (value.includes('@') && value.includes('.')) type = 'email';
             }
 
-            return {
-                id: info.id,
-                title: info.title,
-                type: info.type as NexusType, // Cast or map
-                content: htmlContent,
-                lastModified: new Date(),
-                tags: Array.isArray(file.metadata.tags) ? file.metadata.tags : [],
-                metadata: nexusMetadata
-            };
+            nexusMetadata.push({ key, label: key, value: val, type });
         });
 
-        return { schemas, objects, assets };
+
+
+        return {
+            id: info.id,
+            title: info.title,
+            type: info.type as NexusType,
+            content: htmlContent,
+            lastModified: new Date(),
+            tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+            metadata: nexusMetadata
+        };
+    }
+
+    private parseHtmlContent(content: string, info: FileInfo): { metadata: any; body: string } {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        const metadata: any = {};
+
+        // 1. Extract Title
+        const title = doc.querySelector('h1')?.textContent || doc.title || 'Untitled';
+        metadata.title = title;
+
+        // 2. Extract Properties (Notion specific)
+        const propertiesTable = doc.querySelector('.properties');
+        if (propertiesTable) {
+            propertiesTable.querySelectorAll('tr').forEach(row => {
+                const key = row.querySelector('th')?.textContent?.trim();
+                const value = row.querySelector('td')?.textContent?.trim();
+                if (key && value) {
+                    metadata[key.toLowerCase()] = value;
+                }
+            });
+            propertiesTable.remove(); // Remove from body
+        }
+
+        // 3. Resolve Links and Images
+        doc.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (src) {
+                const decodedSrc = decodeURIComponent(src);
+                const resolvedPath = this.resolvePath(info.path, decodedSrc);
+                const newName = this.assetMap.get(resolvedPath);
+                if (newName) {
+                    img.setAttribute('src', `asset://${newName}`);
+                }
+            }
+        });
+
+        doc.querySelectorAll('a').forEach(a => {
+            const href = a.getAttribute('href');
+            if (href) {
+                const decodedHref = decodeURIComponent(href);
+                if (!href.startsWith('http')) {
+                    // Resolve internal link
+                    let target = this.fileMap.get(decodedHref);
+                    if (!target) {
+                        const resolved = this.resolvePath(info.path, decodedHref);
+                        target = this.fileMap.get(resolved);
+                    }
+                    if (!target) {
+                        const resolved = this.resolvePath(info.path, decodedHref);
+                        target = this.fileMap.get(resolved + '.html') || this.fileMap.get(resolved + '.md');
+                    }
+
+                    if (target) {
+                        a.setAttribute('data-object-id', target.id);
+                        a.classList.add('nexus-mention');
+                        // Remove href or keep it? Keep it for fallback?
+                        // Nexus uses data-object-id for navigation.
+                    }
+                }
+            }
+        });
+
+        // 4. Extract Body
+        // Notion puts content in .page-body usually, or just body
+        const bodyContent = doc.querySelector('.page-body')?.innerHTML || doc.body.innerHTML;
+
+        return { metadata, body: bodyContent };
     }
 
     private parseFrontmatter(content: string): { metadata: any; body: string } {

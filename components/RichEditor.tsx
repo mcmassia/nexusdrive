@@ -540,6 +540,49 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     colorizeMentions();
   }, [initialContent, isUserEditing]); // Re-run when content changes
 
+  // Resolve Asset URLs (Images)
+  useEffect(() => {
+    const resolveAssets = async () => {
+      if (!editorRef.current) return;
+
+      const images = editorRef.current.querySelectorAll('img');
+      images.forEach(async (img) => {
+        const src = img.getAttribute('src');
+        if (src && src.startsWith('asset://')) {
+          const assetId = src.replace('asset://', '');
+          try {
+            const asset = await db.getAsset(assetId);
+            if (asset) {
+              const url = URL.createObjectURL(asset.blob);
+              img.src = url;
+              // Store the blob URL on the element to revoke it later if needed
+              (img as any)._blobUrl = url;
+            } else {
+              console.warn(`Asset not found: ${assetId}`);
+            }
+          } catch (error) {
+            console.error(`Failed to load asset ${assetId}:`, error);
+          }
+        }
+      });
+    };
+
+    resolveAssets();
+
+    // Cleanup function to revoke object URLs
+    return () => {
+      if (editorRef.current) {
+        const images = editorRef.current.querySelectorAll('img');
+        images.forEach((img) => {
+          const url = (img as any)._blobUrl;
+          if (url) {
+            URL.revokeObjectURL(url);
+          }
+        });
+      }
+    };
+  }, [initialContent]); // Re-run when content changes
+
   const triggerChange = () => {
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);

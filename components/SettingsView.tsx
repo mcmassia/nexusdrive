@@ -9,10 +9,12 @@ import { NexusObject } from '../types';
 interface SettingsViewProps {
     lang: 'en' | 'es';
     objects: NexusObject[];
+    initialTab?: 'types' | 'gmail' | 'improvements';
+    initialImprovementFilter?: 'all' | 'pending' | 'applied' | 'rejected';
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
-    const [activeTab, setActiveTab] = useState<'types' | 'gmail' | 'improvements'>('types');
+const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects, initialTab = 'types', initialImprovementFilter }) => {
+    const [activeTab, setActiveTab] = useState<'types' | 'gmail' | 'improvements'>(initialTab);
 
     return (
         <div className="flex h-full bg-slate-50 dark:bg-black/10">
@@ -67,7 +69,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects }) => {
             <div className="flex-1 overflow-y-auto">
                 {activeTab === 'types' && <TypeManager objects={objects} />}
                 {activeTab === 'gmail' && <GmailConfig lang={lang} />}
-                {activeTab === 'improvements' && <ImprovementsPanel lang={lang} />}
+                {activeTab === 'improvements' && <ImprovementsPanel lang={lang} initialFilter={initialImprovementFilter} />}
             </div>
         </div>
     );

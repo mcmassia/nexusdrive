@@ -668,21 +668,135 @@ class DriveService {
     /**
      * Process content for Drive: Replace internal links with Drive links
      */
-    private async processContentForDrive(content: string): Promise<string> {
-        if (!content) return '';
+    private async makeFilePublic(fileId: string): Promise<void> {
+        try {
+            await this.fetchWithAuth(
+                `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        role: 'reader',
+                        type: 'anyone'
+                    })
+                }
+            );
+            console.log(`[DriveService] Made file ${fileId} public`);
+        } catch (error) {
+            console.error(`[DriveService] Failed to make file ${fileId} public`, error);
+        }
+    }
 
-        // Dynamically import db to avoid circular dependency
-        const { db } = await import('./db');
+    private async uploadAsset(blob: Blob, name: string): Promise<{ id: string, webViewLink: string }> {
+        const assetsFolderId = await this.getOrCreateAssetsFolder();
 
-        // Regex to find anchor tags with data-object-id (Nexus standard)
-        // We assume internal links look like <a ... data-object-id="123" ...>
+        const metadata = {
+            name,
+            parents: [assetsFolderId]
+        };
 
-        if (typeof window === 'undefined') {
-            return content; // Fallback for non-browser environments
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', blob);
+
+        const response = await this.fetchWithAuth(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink',
+            {
+                method: 'POST',
+                body: form
+            }
+        );
+
+        const result = await response.json();
+
+        // Make public immediately
+        if (result.id) {
+            await this.makeFilePublic(result.id);
         }
 
+        return result;
+    }
+
+    async processContentForDrive(htmlContent: string): Promise<string> {
+        if (!this.isInitialized || !this.nexusFolderId) return htmlContent;
+
         const parser = new DOMParser();
-        const doc = parser.parseFromString(content, 'text/html');
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const { db } = await import('./db');
+
+        // 1. Process Images (Upload to Drive)
+        const images = doc.querySelectorAll('img');
+        console.log(`[DriveService] Found ${images.length} images in content`);
+
+        for (const img of Array.from(images)) {
+            const src = img.getAttribute('src');
+            console.log(`[DriveService] Image src: ${src}`);
+
+            if (src && src.startsWith('asset://')) {
+                const assetId = src.replace('asset://', '');
+                console.log(`[DriveService] Processing asset: ${assetId}`);
+
+                try {
+                    const asset = await db.getAsset(assetId);
+                    console.log(`[DriveService] Asset found in DB:`, !!asset);
+
+                    if (asset) {
+                        let driveLink = asset.driveLink;
+                        let driveId = asset.driveId;
+                        let isPublic = asset.isPublic;
+
+                        console.log(`[DriveService] Existing driveLink: ${driveLink}, Public: ${isPublic}`);
+
+                        // If not uploaded yet, upload it
+                        if (!driveLink) {
+                            console.log(`[DriveService] Uploading asset ${assetId} to Drive...`);
+                            const result = await this.uploadAsset(asset.blob, `asset_${assetId}`);
+                            driveLink = result.webViewLink;
+                            driveId = result.id;
+                            isPublic = true; // uploadAsset makes it public
+
+                            console.log(`[DriveService] Uploaded. Link: ${driveLink}`);
+
+                            // Save back to DB
+                            await db.updateAsset(assetId, {
+                                driveId: result.id,
+                                driveLink: result.webViewLink,
+                                isPublic: true
+                            });
+                        }
+                        // If uploaded but not marked public (legacy), make it public
+                        else if (driveId && !isPublic) {
+                            console.log(`[DriveService] Making existing asset ${assetId} public...`);
+                            await this.makeFilePublic(driveId);
+                            await db.updateAsset(assetId, { isPublic: true });
+                            isPublic = true;
+                        }
+
+                        if (driveLink && driveId) {
+                            // Use export link for src (better for embedding)
+                            const exportLink = `https://drive.google.com/uc?export=view&id=${driveId}`;
+                            img.setAttribute('src', exportLink);
+
+                            // Wrap in link to view in Drive
+                            const wrapper = doc.createElement('a');
+                            wrapper.setAttribute('href', driveLink);
+                            wrapper.setAttribute('target', '_blank');
+                            img.parentNode?.insertBefore(wrapper, img);
+                            wrapper.appendChild(img);
+                        } else if (driveLink) {
+                            // Fallback if no driveId (shouldn't happen with new logic)
+                            img.setAttribute('src', driveLink);
+                        }
+                    } else {
+                        console.warn(`[DriveService] Asset ${assetId} not found in DB`);
+                    }
+                } catch (e) {
+                    console.warn(`[DriveService] Failed to process asset ${assetId}`, e);
+                }
+            }
+        }
+
+        // 2. Process Links
         const links = doc.querySelectorAll('a');
 
         // We need to process links sequentially to await DB lookups
@@ -711,6 +825,16 @@ class DriveService {
         }
 
         return doc.body.innerHTML;
+    }
+
+
+
+    /**
+     * Get or create 'Assets' folder
+     */
+    private async getOrCreateAssetsFolder(): Promise<string> {
+        if (!this.nexusFolderId) throw new Error('Nexus folder not initialized');
+        return this.findOrCreateFolder('Assets', this.nexusFolderId);
     }
 
     /**

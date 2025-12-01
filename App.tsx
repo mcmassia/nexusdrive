@@ -53,6 +53,8 @@ const App: React.FC = () => {
   const [tagsSearchQuery, setTagsSearchQuery] = useState<string>('');
   const [viewEvent, setViewEvent] = useState<any | null>(null);
   const [isFeatureMenuOpen, setIsFeatureMenuOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'types' | 'gmail' | 'improvements'>('types');
+  const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | 'pending' | 'applied' | 'rejected'>('all');
 
   const isFocusMode = isFeatureEnabled('focus_mode');
 
@@ -528,6 +530,8 @@ const App: React.FC = () => {
                         <div className="p-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/30">
                           <button
                             onClick={() => {
+                              setSettingsInitialTab('improvements');
+                              setSettingsInitialFilter('pending');
                               setCurrentView('settings');
                               setIsFeatureMenuOpen(false);
                             }}
@@ -706,7 +710,12 @@ const App: React.FC = () => {
 
                 {
                   currentView === 'settings' && (
-                    <SettingsView lang={lang} objects={objects} />
+                    <SettingsView
+                      lang={lang}
+                      objects={objects}
+                      initialTab={settingsInitialTab}
+                      initialImprovementFilter={settingsInitialFilter}
+                    />
                   )
                 }
 
@@ -804,12 +813,8 @@ const App: React.FC = () => {
                     <Editor
                       object={selectedObject}
                       onSave={async (obj) => {
-                        const savedObj = await db.saveObject(obj);
                         await loadData();
-                        // Update selectedObject with the returned object (which has driveFileId)
-                        if (savedObj) {
-                          setSelectedObject(savedObj);
-                        }
+                        setSelectedObject(obj);
                       }}
                       onClose={() => setSelectedObject(null)}
                       lang={lang}
@@ -845,7 +850,7 @@ const App: React.FC = () => {
               {isFocusMode && (
                 <div className="absolute bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4">
                   <button
-                    onClick={() => rejectFeature('focus_mode')}
+                    onClick={() => toggleFeature('focus_mode')}
                     className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 font-medium"
                   >
                     <Maximize2 size={16} />

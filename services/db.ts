@@ -69,6 +69,18 @@ interface NexusDB extends DBSchema {
     key: string; // object ID
     value: { id: string; vector: number[] };
   };
+  assets: {
+    key: string; // asset ID (filename)
+    value: {
+      id: string;
+      blob: Blob;
+      mimeType: string;
+      originalName: string;
+      driveLink?: string;
+      driveId?: string;
+      isPublic?: boolean;
+    };
+  };
 }
 
 /**
@@ -97,7 +109,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 9, { // Bump version to 9
+      this.db = await openDB<NexusDB>('nexus-db', 10, { // Bump version to 10
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -166,6 +178,11 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('app_preferences')) {
             db.createObjectStore('app_preferences', { keyPath: 'id' });
             console.log('[LocalDB] Created app_preferences store');
+          }
+          // NEW in v2.6: Assets store (for images/attachments)
+          if (!db.objectStoreNames.contains('assets')) {
+            db.createObjectStore('assets', { keyPath: 'id' });
+            console.log('[LocalDB] Created assets store');
           }
         },
       });
@@ -799,9 +816,57 @@ class LocalDatabase {
     }
   }
 
+  async saveAsset(id: string, blob: Blob, originalName: string): Promise<void> {
+    if (!this.db) return;
+    try {
+      await this.db.put('assets', {
+        id,
+        blob,
+        mimeType: blob.type,
+        originalName
+      });
+      console.log(`✅[LocalDB] Asset saved: ${id}`);
+    } catch (error) {
+      console.error(`❌[LocalDB] Failed to save asset ${id}: `, error);
+    }
+  }
+
+  async getAsset(id: string): Promise<{ blob: Blob, mimeType: string, driveLink?: string, driveId?: string, isPublic?: boolean } | null> {
+    if (!this.db) return null;
+    try {
+      const asset = await this.db.get('assets', id);
+      return asset ? {
+        blob: asset.blob,
+        mimeType: asset.mimeType,
+        driveLink: asset.driveLink,
+        driveId: asset.driveId,
+        isPublic: asset.isPublic
+      } : null;
+    } catch (error) {
+      console.error(`❌ [LocalDB] Failed to get asset ${id}:`, error);
+      return null;
+    }
+  }
+
+  async updateAsset(id: string, updates: Partial<{ driveLink: string, driveId: string, isPublic: boolean }>): Promise<void> {
+    if (!this.db) return;
+    try {
+      const tx = this.db.transaction('assets', 'readwrite');
+      const store = tx.objectStore('assets');
+      const asset = await store.get(id);
+      if (asset) {
+        Object.assign(asset, updates);
+        await store.put(asset);
+      }
+      await tx.done;
+    } catch (error) {
+      console.error(`❌ [LocalDB] Failed to update asset ${id}:`, error);
+    }
+  }
+
   async deleteObject(id: string): Promise<void> {
     if (!this.db) {
-      console.log(`🗑️[LocalDB] Demo mode: Cannot delete object ${id} (in -memory only)`);
+      console.log(`🗑️[LocalDB] Demo mode: Cannot delete object ${id}(in -memory only)`);
       throw new Error('Cannot delete in demo mode');
     }
 
@@ -896,7 +961,7 @@ class LocalDatabase {
               // Increased threshold to 0.55 to be extremely strict
               // This ensures only very relevant semantic matches appear
               if (similarity > 0.55) {
-                console.log(`[LocalDB] Vector match: ${item.id} score=${similarity.toFixed(3)}`);
+                console.log(`[LocalDB] Vector match: ${item.id} score = ${similarity.toFixed(3)} `);
                 // If object already found by keyword, boost its score
                 if (scoresMap.has(item.id)) {
                   const currentScore = scoresMap.get(item.id) || 0;
@@ -1025,7 +1090,7 @@ class LocalDatabase {
           const day = parts[0].padStart(2, '0');
           const month = parts[1].padStart(2, '0');
           const year = parts[2];
-          return `${year}-${month}-${day}`;
+          return `${year} -${month} -${day} `;
         }
       }
       // Try standard Date parsing (handles ISO strings, etc.)
@@ -1358,7 +1423,7 @@ class LocalDatabase {
       if (prefs?.connectedAccounts) {
         for (const account of prefs.connectedAccounts) {
           try {
-            console.log(`[LocalDB] Syncing secondary account: ${account.email}`);
+            console.log(`[LocalDB] Syncing secondary account: ${account.email} `);
             let token = account.accessToken?.trim();
 
             // Debug scopes for this account
@@ -1399,7 +1464,7 @@ class LocalDatabase {
                       detail: {
                         type: 'error',
                         message: 'Gmail Sync Error',
-                        description: `Could not refresh token for ${account.email}. Please reconnect in Settings.`,
+                        description: `Could not refresh token for ${account.email}.Please reconnect in Settings.`,
                         duration: 10000 // 10 seconds
                       }
                     }));
@@ -1410,7 +1475,7 @@ class LocalDatabase {
               }
             }
           } catch (e) {
-            console.error(`[LocalDB] Error syncing account ${account.email}:`, e);
+            console.error(`[LocalDB] Error syncing account ${account.email}: `, e);
           }
         }
       }
@@ -1493,7 +1558,7 @@ class LocalDatabase {
       // 1. Get message to find owner
       const message = await this.db.get('gmail_messages', id);
       if (!message) {
-        console.warn(`[LocalDB] Message ${id} not found locally, skipping server delete`);
+        console.warn(`[LocalDB] Message ${id} not found locally, skipping server delete `);
         return;
       }
 
@@ -1520,12 +1585,12 @@ class LocalDatabase {
       // Dynamically import to avoid circular dependency
       const { gmailService } = await import('./gmailService');
 
-      console.log(`🗑️ [LocalDB] Trashing message ${id} on server (Owner: ${ownerEmail || 'unknown'})...`);
+      console.log(`🗑️[LocalDB] Trashing message ${id} on server(Owner: ${ownerEmail || 'unknown'})...`);
       try {
         await gmailService.trashMessage('me', id, token || undefined);
-        console.log(`✅ [LocalDB] Message ${id} trashed on server`);
+        console.log(`✅[LocalDB] Message ${id} trashed on server`);
       } catch (serverError) {
-        console.error(`❌ [LocalDB] Failed to trash on server:`, serverError);
+        console.error(`❌[LocalDB] Failed to trash on server: `, serverError);
         // Continue to delete locally so UI updates, but warn user?
         // For now, we assume if it fails it might be already deleted or network issue.
         // We still delete locally to satisfy the user's immediate request.
@@ -1533,7 +1598,7 @@ class LocalDatabase {
 
       // 4. Delete Locally
       await this.db.delete('gmail_messages', id);
-      console.log(`🗑️ [LocalDB] Deleted Gmail message ${id} locally`);
+      console.log(`🗑️[LocalDB] Deleted Gmail message ${id} locally`);
 
     } catch (error) {
       console.error('Error deleting Gmail message:', error);
@@ -1601,7 +1666,7 @@ class LocalDatabase {
     const nexusType = type as NexusType;
 
     // Create HTML content
-    let htmlContent = `<h1>${subject}</h1>`;
+    let htmlContent = `< h1 > ${subject} </h1>`;
     htmlContent += `<p style="color: gray;">From: ${from} | Date: ${date}</p>`;
     htmlContent += `<hr />`;
 

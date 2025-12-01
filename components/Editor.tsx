@@ -228,9 +228,9 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
             tags: uniqueTags,
             extractedTasks: tasks
         };
-        await db.saveObject(updated);
-        onSave(updated);
-        setCurrentObject(updated);
+        const saved = await db.saveObject(updated);
+        await onSave(saved);
+        setCurrentObject(saved);
         setTimeout(() => setIsSaving(false), 500);
     };
 

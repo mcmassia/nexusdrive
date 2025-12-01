@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from './SettingsContext';
 import {
-    Sparkles, Zap, Moon, Mic, Layout, Timer, BookOpen, Database, FileText, Palette, Link, ListTree, PieChart, Mail, WifiOff, Command, PlusCircle, MonitorPlay, MessageSquare, Smile, CheckCircle, XCircle, ArrowRight, Brain, Globe, Code, PenTool, History, Users, Volume2, Eye, Activity, Target, Calendar as CalendarIcon, MessageCircle, GitBranch, FileDigit, Image, Speaker, Book, Music, BarChart, Flag, Sun, Cloud, TrendingUp, Rss
+    Sparkles, Zap, Moon, Mic, Layout, Timer, BookOpen, Database, FileText, Palette, Link, ListTree, PieChart, Mail, WifiOff, Command, PlusCircle, MonitorPlay, MessageSquare, Smile, CheckCircle, XCircle, ArrowRight, Brain, Globe, Code, PenTool, History, Users, Volume2, Eye, Activity, Target, Calendar as CalendarIcon, MessageCircle, GitBranch, FileDigit, Image, Speaker, Book, Music, BarChart, Flag, Sun, Cloud, TrendingUp, Rss, Upload
 } from 'lucide-react';
+import NotionImportModal from './NotionImportModal';
 
 interface Improvement {
     id: string;
@@ -70,12 +71,14 @@ const ALL_IMPROVEMENTS: Improvement[] = [
 
 interface ImprovementsPanelProps {
     lang: 'en' | 'es';
+    initialFilter?: 'all' | 'pending' | 'applied' | 'rejected';
 }
 
-const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
-    const { prefs, isFeatureEnabled, applyFeature, rejectFeature } = useSettings();
-    const [filter, setFilter] = useState<'all' | 'pending' | 'applied' | 'rejected'>('all');
+const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang, initialFilter = 'all' }) => {
+    const { prefs, isFeatureEnabled, applyFeature, rejectFeature, toggleFeature } = useSettings();
+    const [filter, setFilter] = useState<'all' | 'pending' | 'applied' | 'rejected'>(initialFilter);
     const [simulatingId, setSimulatingId] = useState<string | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // We maintain a local state of "visible" improvements to ensure we always show 20
     const [visibleImprovements, setVisibleImprovements] = useState<Improvement[]>([]);
@@ -160,8 +163,8 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors relative top-[1px] ${filter === f
-                                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-slate-50 dark:bg-slate-800/50'
-                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-slate-50 dark:bg-slate-800/50'
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                                 }`}
                         >
                             {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -184,10 +187,10 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                         <div
                             key={imp.id}
                             className={`bg-white dark:bg-slate-900 rounded-xl border transition-all duration-200 flex flex-col relative overflow-hidden ${status === 'applied'
-                                    ? 'border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]'
-                                    : status === 'rejected'
-                                        ? 'border-slate-200 dark:border-slate-800 opacity-75 grayscale-[0.5]'
-                                        : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg'
+                                ? 'border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]'
+                                : status === 'rejected'
+                                    ? 'border-slate-200 dark:border-slate-800 opacity-75 grayscale-[0.5]'
+                                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg'
                                 }`}
                         >
                             {isSimulating && (
@@ -206,9 +209,9 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                             )}
 
                             <div className={`h-1.5 w-full rounded-t-xl bg-gradient-to-r ${imp.category === 'AI' ? 'from-purple-500 to-pink-500' :
-                                    imp.category === 'Productivity' ? 'from-blue-500 to-cyan-500' :
-                                        imp.category === 'Visual' ? 'from-amber-500 to-orange-500' :
-                                            'from-emerald-500 to-teal-500'
+                                imp.category === 'Productivity' ? 'from-blue-500 to-cyan-500' :
+                                    imp.category === 'Visual' ? 'from-amber-500 to-orange-500' :
+                                        'from-emerald-500 to-teal-500'
                                 }`} />
 
                             <div className="p-5 flex-1 flex flex-col">
@@ -216,9 +219,14 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                                     <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                         <imp.icon size={24} className="text-slate-700 dark:text-slate-200" />
                                     </div>
-                                    {status === 'applied' && (
+                                    {status === 'applied' && isFeatureEnabled(imp.id) && (
                                         <span className="text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
-                                            <CheckCircle size={12} /> ACTIVE
+                                            <CheckCircle size={12} /> {lang === 'es' ? 'ACTIVO' : 'ACTIVE'}
+                                        </span>
+                                    )}
+                                    {status === 'applied' && !isFeatureEnabled(imp.id) && (
+                                        <span className="text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
+                                            <WifiOff size={12} /> {lang === 'es' ? 'INACTIVO' : 'INACTIVE'}
                                         </span>
                                     )}
                                     {status === 'rejected' && (
@@ -251,13 +259,26 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800/50 flex justify-end">
+                                    <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800/50 flex justify-between items-center">
+                                        {imp.id === 'notion_import' && status === 'applied' && isFeatureEnabled(imp.id) ? (
+                                            <button
+                                                onClick={() => setIsImportModalOpen(true)}
+                                                className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center gap-1"
+                                            >
+                                                <Upload size={12} />
+                                                {lang === 'es' ? 'Importar' : 'Import'}
+                                            </button>
+                                        ) : (
+                                            <div></div>
+                                        )}
                                         <button
-                                            onClick={() => status === 'applied' ? rejectFeature(imp.id) : applyFeature(imp.id)}
+                                            onClick={() => status === 'applied' ? toggleFeature(imp.id) : applyFeature(imp.id)}
                                             className="text-xs text-slate-400 hover:text-blue-500 underline decoration-dotted"
                                         >
                                             {status === 'applied'
-                                                ? (lang === 'es' ? 'Desactivar' : 'Deactivate')
+                                                ? (isFeatureEnabled(imp.id)
+                                                    ? (lang === 'es' ? 'Desactivar' : 'Deactivate')
+                                                    : (lang === 'es' ? 'Activar' : 'Activate'))
                                                 : (lang === 'es' ? 'Reconsiderar' : 'Reconsider')}
                                         </button>
                                     </div>
@@ -273,6 +294,17 @@ const ImprovementsPanel: React.FC<ImprovementsPanelProps> = ({ lang }) => {
                     <Sparkles size={48} className="mx-auto mb-4 opacity-20" />
                     <p>{lang === 'es' ? 'No hay mejoras en esta categoría.' : 'No improvements found in this category.'}</p>
                 </div>
+            )}
+            {isImportModalOpen && (
+                <NotionImportModal
+                    onClose={() => setIsImportModalOpen(false)}
+                    onImportComplete={() => {
+                        // Refresh logic if needed, e.g. reload objects in parent
+                        // For now we just close, user will see new objects in documents view
+                        window.location.reload(); // Simple refresh to show new data
+                    }}
+                    lang={lang}
+                />
             )}
         </div>
     );

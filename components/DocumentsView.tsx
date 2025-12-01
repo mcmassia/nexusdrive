@@ -19,6 +19,54 @@ interface DocumentsViewProps {
 type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc' | 'type';
 type ViewMode = 'table' | 'cards';
 
+const ContentPreview: React.FC<{ html: string }> = ({ html }) => {
+    const previewRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        const resolveAssets = async () => {
+            if (!previewRef.current) return;
+
+            const images = previewRef.current.querySelectorAll('img');
+            images.forEach(async (img) => {
+                const src = img.getAttribute('src');
+                if (src && src.startsWith('asset://')) {
+                    const assetId = src.replace('asset://', '');
+                    try {
+                        const asset = await db.getAsset(assetId);
+                        if (asset) {
+                            const url = URL.createObjectURL(asset.blob);
+                            img.src = url;
+                            (img as any)._blobUrl = url;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to load asset ${assetId}`, error);
+                    }
+                }
+            });
+        };
+
+        resolveAssets();
+
+        return () => {
+            if (previewRef.current) {
+                const images = previewRef.current.querySelectorAll('img');
+                images.forEach((img) => {
+                    const url = (img as any)._blobUrl;
+                    if (url) URL.revokeObjectURL(url);
+                });
+            }
+        };
+    }, [html]);
+
+    return (
+        <div
+            ref={previewRef}
+            className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 flex-1 [&_*]:text-slate-500 dark:[&_*]:text-slate-400"
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
+    );
+};
+
 const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, onRefresh, activeTypeFilter, lang, availableTypes, filterType }) => {
     const { addNotification } = useNotification();
     const [searchQuery, setSearchQuery] = useState('');
@@ -422,8 +470,8 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                                                         }
                                                     }}
                                                     className={`p-1 transition-colors ml-1 ${(obj.driveFileId || obj.driveWebViewLink)
-                                                            ? 'text-green-500 hover:text-green-600'
-                                                            : 'text-slate-300 hover:text-green-500'
+                                                        ? 'text-green-500 hover:text-green-600'
+                                                        : 'text-slate-300 hover:text-green-500'
                                                         }`}
                                                     title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
                                                 >
@@ -512,8 +560,8 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                                                 }
                                             }}
                                             className={`p-1 transition-opacity ${(obj.driveFileId || obj.driveWebViewLink)
-                                                    ? 'text-green-500 opacity-100'
-                                                    : 'text-slate-300 hover:text-green-500 opacity-0 group-hover:opacity-100'
+                                                ? 'text-green-500 opacity-100'
+                                                : 'text-slate-300 hover:text-green-500 opacity-0 group-hover:opacity-100'
                                                 }`}
                                             title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
                                         >
@@ -537,7 +585,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ objects, onObjectClick, o
                                             </div>
                                         </div>
                                         <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg mb-1 truncate">{obj.title}</h3>
-                                        <div className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 flex-1 [&_*]:text-slate-500 dark:[&_*]:text-slate-400" dangerouslySetInnerHTML={{ __html: obj.content }} />
+                                        <ContentPreview html={obj.content} />
                                         <div className="text-xs text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                                             Last edited {formatDate(obj.lastModified)}
                                         </div>
