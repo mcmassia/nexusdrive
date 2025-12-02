@@ -1,5 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase, deleteDB } from 'idb';
-import { NexusObject, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig, EmailData, GmailPreferences, AppPreferences } from '../types';
+import { NexusObject, NexusTask, NexusType, GraphNode, GraphLink, TypeSchema, PropertyDefinition, BacklinkContext, MentionContext, TagConfig, EmailData, Template, AppPreferences, GmailPreferences, ConnectedAccount, Preferences } from '../types';
 import { INITIAL_OBJECTS, INITIAL_LINKS } from '../constants';
 import { driveService } from './driveService';
 import { authService } from './authService';
@@ -64,6 +64,10 @@ interface NexusDB extends DBSchema {
   app_preferences: {
     key: string; // 'default'
     value: AppPreferences;
+  };
+  preferences: {
+    key: string;
+    value: Preferences;
   };
   embeddings: {
     key: string; // object ID
@@ -1371,43 +1375,32 @@ class LocalDatabase {
 
 
       const docResults = allDocs.map(d => {
-        // Build enriched content that includes metadata for better AI matching
-        let enrichedContent = d.content;
+        // Resolve document references in metadata to titles
+        const enrichedMetadata = d.metadata?.map(m => {
+          if (m.type === 'documents' && Array.isArray(m.value)) {
+            // Resolve document IDs to titles
+            const titles = m.value
+              .map((id: string) => {
+                const doc = allDocs.find(d => d.id === id);
+                return doc ? doc.title : null;
+              })
+              .filter(Boolean);
 
-        // Add metadata values that might be relevant for searches
-        if (d.metadata && d.metadata.length > 0) {
-          const metadataText = d.metadata
-            .filter(m => m.value && m.type !== 'date') // Skip empty and date fields
-            .map(m => {
-              if (m.type === 'documents' && Array.isArray(m.value)) {
-                // Handle document references (like Personas/Equipos, Organizacion)
-                // m.value is an array of document IDs, need to lookup titles
-                const titles = m.value
-                  .map((id: string) => {
-                    const doc = allDocs.find(d => d.id === id);
-                    return doc ? doc.title : null;
-                  })
-                  .filter(Boolean)
-                  .join(', ');
-                return titles ? `${m.label}: ${titles}` : null;
-              }
-              return `${m.label}: ${m.value}`;
-            })
-            .filter(Boolean)
-            .join('\n');
-
-          if (metadataText) {
-            // IMPORTANT: Put metadata at BEGINNING so it's always in first 1000 chars sent to AI
-            enrichedContent = `[Metadata]\n${metadataText}\n\n${enrichedContent}`;
+            return {
+              ...m,
+              value: titles // Replace IDs with titles
+            };
           }
-        }
+          return m;
+        }) || [];
 
         return {
           ...d,
-          content: enrichedContent,
+          metadata: enrichedMetadata,
           source: 'document' as const
         };
       });
+
 
       // Debug: Check if Reunion docs have Alberto Massia AFTER enrichment
       const enrichedReunionDocs = docResults.filter(d =>
@@ -2151,13 +2144,24 @@ class LocalDatabase {
   // App Preferences Methods
   async getAppPreferences(): Promise<AppPreferences> {
     if (!this.db) return { appliedImprovements: [], rejectedImprovements: [] };
-    const prefs = await this.db.get('app_preferences', 'default');
+    const prefs = await this.db.get('preferences', 'app');
     return prefs || { appliedImprovements: [], rejectedImprovements: [] };
   }
 
   async saveAppPreferences(prefs: AppPreferences): Promise<void> {
     if (!this.db) return;
-    await this.db.put('app_preferences', { ...prefs, id: 'default' } as any);
+    await this.db.put('preferences', prefs, 'app');
+  }
+
+  async getPreferences(): Promise<Preferences> {
+    if (!this.db) return {};
+    const prefs = await this.db.get('preferences', 'general');
+    return prefs || {};
+  }
+
+  async savePreferences(prefs: Preferences): Promise<void> {
+    if (!this.db) return;
+    await this.db.put('preferences', prefs, 'general');
   }
 }
 

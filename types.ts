@@ -91,6 +91,7 @@ export interface NexusObject {
   driveWebViewLink?: string; // Direct link to open in Drive
   extractedTasks?: NexusTask[];
   pinned?: boolean;
+  aliases?: string[]; // Alternative names/terms for this document
 }
 
 export interface GraphNode extends SimulationNodeDatum {
@@ -219,4 +220,14 @@ export interface SearchFilters {
   keywords?: string[];
   entities?: string[]; // People, Projects
   source?: 'all' | 'documents' | 'email' | 'calendar';
+}
+
+// User preferences and settings
+export interface Preferences {
+  language?: string;
+  theme?: string;
+  currentUser?: {
+    personDocumentId: string; // ID of the Persona document representing current user
+    name: string;             // Display name
+  };
 }
