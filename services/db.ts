@@ -1354,10 +1354,76 @@ class LocalDatabase {
       const docsWithTasks = allDocs.filter(d => d.extractedTasks && d.extractedTasks.length > 0);
       console.log(`[LocalDB] DEBUG: Documents with tasks: ${docsWithTasks.length}`, docsWithTasks.map(d => ({ title: d.title, taskCount: d.extractedTasks.length })));
 
-      const docResults = allDocs.map(d => ({
-        ...d,
-        source: 'document' as const
-      }));
+      // Debug: Check documents with type Reunion/Meeting
+      const reunionDocs = allDocs.filter(d =>
+        d.type.toLowerCase().includes('reunion') ||
+        d.type.toLowerCase().includes('meeting')
+      );
+      console.log(`[LocalDB] DEBUG: Documents with type Reunion/Meeting: ${reunionDocs.length}`);
+      if (reunionDocs.length > 0) {
+        console.log('[LocalDB] DEBUG: Reunion/Meeting docs:', reunionDocs.map(d => ({
+          title: d.title,
+          type: d.type,
+          hasAlbertoMassia: d.content.toLowerCase().includes('alberto massia') ||
+            JSON.stringify(d.metadata).toLowerCase().includes('alberto massia')
+        })));
+      }
+
+
+      const docResults = allDocs.map(d => {
+        // Build enriched content that includes metadata for better AI matching
+        let enrichedContent = d.content;
+
+        // Add metadata values that might be relevant for searches
+        if (d.metadata && d.metadata.length > 0) {
+          const metadataText = d.metadata
+            .filter(m => m.value && m.type !== 'date') // Skip empty and date fields
+            .map(m => {
+              if (m.type === 'documents' && Array.isArray(m.value)) {
+                // Handle document references (like Personas/Equipos, Organizacion)
+                // m.value is an array of document IDs, need to lookup titles
+                const titles = m.value
+                  .map((id: string) => {
+                    const doc = allDocs.find(d => d.id === id);
+                    return doc ? doc.title : null;
+                  })
+                  .filter(Boolean)
+                  .join(', ');
+                return titles ? `${m.label}: ${titles}` : null;
+              }
+              return `${m.label}: ${m.value}`;
+            })
+            .filter(Boolean)
+            .join('\n');
+
+          if (metadataText) {
+            // IMPORTANT: Put metadata at BEGINNING so it's always in first 1000 chars sent to AI
+            enrichedContent = `[Metadata]\n${metadataText}\n\n${enrichedContent}`;
+          }
+        }
+
+        return {
+          ...d,
+          content: enrichedContent,
+          source: 'document' as const
+        };
+      });
+
+      // Debug: Check if Reunion docs have Alberto Massia AFTER enrichment
+      const enrichedReunionDocs = docResults.filter(d =>
+        d.type.toLowerCase().includes('reunion') ||
+        d.type.toLowerCase().includes('meeting')
+      );
+      if (enrichedReunionDocs.length > 0) {
+        console.log('[LocalDB] DEBUG: Reunion docs AFTER enrichment (first 3):');
+        enrichedReunionDocs.slice(0, 3).forEach(d => {
+          console.log(`  - ${d.title}:`);
+          console.log(`    Type: ${d.type}`);
+          console.log(`    Has Alberto Massia in enriched content: ${d.content.toLowerCase().includes('alberto massia')}`);
+          console.log(`    Content preview: ${d.content.substring(0, 300)}...`);
+        });
+      }
+
       results.push(...docResults);
       console.log(`📄 Loaded ${docResults.length} documents`);
 

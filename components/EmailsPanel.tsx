@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../services/db';
-import { Mail, RefreshCw, Paperclip, Calendar, Inbox, ExternalLink, FileText, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Mail, RefreshCw, Paperclip, Calendar, Inbox, ExternalLink, FileText, ChevronLeft, ChevronRight, Trash2, EyeOff } from 'lucide-react';
 import { TRANSLATIONS } from '../constants';
 import DocumentTypeSelector, { DocumentType } from './DocumentTypeSelector';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -32,6 +32,7 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
     const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
     const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
     const [accountMap, setAccountMap] = useState<Record<string, { color: string, name: string }>>({});
+    const [hiddenEmails, setHiddenEmails] = useState<Set<string>>(new Set());
 
     // State for document creation
     const [creationEmail, setCreationEmail] = useState<EmailPreview | null>(null);
@@ -42,7 +43,15 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
     useEffect(() => {
         loadEmails();
         loadAccountInfo();
+        loadHiddenEmails();
     }, []);
+
+    const loadHiddenEmails = () => {
+        const stored = localStorage.getItem('hiddenEmails');
+        if (stored) {
+            setHiddenEmails(new Set(JSON.parse(stored)));
+        }
+    };
 
     const loadAccountInfo = async () => {
         const prefs = await db.getGmailPreferences();
@@ -59,7 +68,7 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                 const colors = ['bg-purple-500', 'bg-green-500', 'bg-yellow-500', 'bg-pink-500'];
                 map[acc.email] = {
                     color: colors[index % colors.length],
-                    name: acc.name
+                    name: acc.email
                 };
             });
         }
@@ -107,6 +116,14 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
         // Better to use a separate state or just handle it in confirmDelete.
         // Let's use emailToDelete = 'BULK' as a flag.
         setEmailToDelete('BULK');
+    };
+
+    const handleHideClick = (emailId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newHidden = new Set(hiddenEmails);
+        newHidden.add(emailId);
+        setHiddenEmails(newHidden);
+        localStorage.setItem('hiddenEmails', JSON.stringify(Array.from(newHidden)));
     };
 
     const confirmDelete = async () => {
@@ -295,7 +312,7 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {emails.map((email) => {
+                        {emails.filter(email => !hiddenEmails.has(email.id)).map((email) => {
                             const isUnread = email.labels?.includes('UNREAD');
                             const isSelected = selectedEmails.has(email.id);
 
@@ -363,9 +380,16 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
                                                 <span>{formatDate(email.date)}</span>
                                             </div>
                                             <button
+                                                onClick={(e) => handleHideClick(email.id, e)}
+                                                className="text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                                                title={lang === 'es' ? 'Ocultar del panel' : 'Hide from panel'}
+                                            >
+                                                <EyeOff size={14} />
+                                            </button>
+                                            <button
                                                 onClick={(e) => handleDeleteClick(email.id, e)}
                                                 className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                                                title={lang === 'es' ? 'Eliminar' : 'Delete'}
+                                                title={lang === 'es' ? 'Eliminar del servidor' : 'Delete from server'}
                                             >
                                                 <Trash2 size={14} />
                                             </button>

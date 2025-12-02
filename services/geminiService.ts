@@ -253,9 +253,9 @@ export class GeminiService {
 
       const candidatesString = candidates.map((c, i) => {
         let itemStr = `[${i}] Source: ${c.source} | Type: ${c.type} | Title: ${c.title}`;
-        // Reduce content length for efficiency with large datasets
-        const contentPreview = c.content.substring(0, 200);
-        itemStr += `\nContent: ${contentPreview}${c.content.length > 200 ? '...' : ''}`;
+        // Increase content length to ensure metadata is included (metadata is appended at end)
+        const contentPreview = c.content.substring(0, 1000);
+        itemStr += `\nContent: ${contentPreview}${c.content.length > 1000 ? '...' : ''}`;
         if (c.tags && c.tags.length > 0) {
           itemStr += `\nTags: ${c.tags.join(', ')}`;
         }
@@ -291,18 +291,38 @@ Task:
 
 CRITICAL FILTERING RULES:
 
+**Person/Organization Names**:
+- If query mentions a person or organization name, search in BOTH:
+  * Title field (for person/org documents)
+  * Metadata fields (Personas/Equipos, Organización, etc.)
+- Use FLEXIBLE matching for names:
+  * "alberto massia" should match "Alberto Massia Gómez"
+  * "salesianos" should match "Colegio Salesianos Montilla"
+  * Match full name if query has partial name
+  * Case-insensitive matching
+- Example: "reuniones alberto massia" → find items with Type="Reunión" AND metadata contains "Alberto Massia" (even if metadata has full name "Alberto Massia Gómez")
+
 **Tags** (e.g., "#smx", "etiqueta #smx"):
 - If query mentions a tag (with # or "etiqueta"), ONLY select items that have that EXACT tag
 - Compare tags case-insensitively (e.g., "smx" matches "#smx" or "#SMX")
 - Example: "organizaciones con #smx" → select items where Type contains "organi" AND Tags contains "smx"
 
 **Types** (e.g., "organizaciones", "meetings", "reuniones"):
-- Match by document Type field
+- Match by document Type field (NOT source field for reuniones)
 - Common mappings:
   * "organizaciones"/"organization" → Type: "Organización" or "Organization"
-  * "reuniones"/"meetings" → Type: "Meeting" or "Reunión" or source: "calendar"
+  * **"reuniones"/"meetings"** → **ONLY search documents**:
+    - Documents where Type field contains "Reunion" OR "Meeting" (case-insensitive, note: "Reunion" without accent)
+    - **DO NOT** search calendar events for reuniones - calendar events are for "eventos" query
+    - **Example**: Query "reuniones alberto massia" should find:
+      * Documents with Type="Reunion", like "Reunión Calidad Colegio" (display name has accent but type field is "Reunion")
+      * Documents with Type="Meeting"
+    - **DO NOT** include source="calendar" items for reuniones
   * "tareas"/"tasks"/"pendientes" → Items with Tasks field populated
-  * "eventos"/"events" → source: "calendar" or Type: "Meeting"
+  * **"eventos"/"events"** → **ONLY calendar events**:
+    - Items where source field equals "calendar"
+    - These are synchronized calendar events, NOT meeting documents
+
 
 **Tasks** (e.g., "tareas pendientes", "open tasks"):
 - If query asks for tasks, look at the "Tasks:" field in items
