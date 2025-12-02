@@ -493,7 +493,15 @@ class LocalDatabase {
     // Filter in memory for now
     if (start && end) {
       return events.filter(e => {
-        const eventStart = new Date(e.start.dateTime || e.start.date);
+        let eventStart: Date;
+        if (e.start.dateTime) {
+          // Event with specific time
+          eventStart = new Date(e.start.dateTime);
+        } else {
+          // All-day event - parse in LOCAL timezone to avoid UTC offset issues
+          const dateParts = e.start.date.split('-');
+          eventStart = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        }
         return eventStart >= start && eventStart <= end;
       });
     }
@@ -924,16 +932,38 @@ class LocalDatabase {
       const resultsMap = new Map<string, NexusObject>();
       const scoresMap = new Map<string, number>();
 
-      // --- 1. Keyword Search (Exact Matches) ---
+      // --- 1. Keyword Search (Exact & Token Matches) ---
       const allObjects = await this.getObjects();
+      const tokens = normalizedQuery.split(/\s+/).filter(t => t.length > 2); // Split into tokens > 2 chars
+
       const keywordMatches = allObjects.filter(obj => {
         const title = this.normalize(obj.title);
         const content = this.normalize(obj.content);
         const tags = obj.tags?.map(t => this.normalize(t)) || [];
 
-        return title.includes(normalizedQuery) ||
-          content.includes(normalizedQuery) ||
-          tags.some(t => t.includes(normalizedQuery));
+        // 1. Exact phrase match (High priority)
+        if (title.includes(normalizedQuery) || content.includes(normalizedQuery)) return true;
+
+        // 2. Token match (OR logic with scoring)
+        if (tokens.length > 0) {
+          const text = title + ' ' + content + ' ' + tags.join(' ');
+          let matchCount = 0;
+          tokens.forEach(token => {
+            if (text.includes(token)) matchCount++;
+          });
+
+          // If at least one token matches, include it (but score depends on how many matched)
+          if (matchCount > 0) {
+            // Boost score based on percentage of tokens matched
+            const matchScore = (matchCount / tokens.length) * 0.5;
+            // Store this score to be added later if it's also a vector match, 
+            // or just use it as base score if we want keyword-only matches to appear.
+            // For now, let's return true to include it in keywordMatches.
+            return true;
+          }
+        }
+
+        return false;
       });
 
       console.log(`🔍[LocalDB] Found ${keywordMatches.length} keyword matches`);
@@ -941,8 +971,27 @@ class LocalDatabase {
       // Add keyword matches to results with a base score
       keywordMatches.forEach(obj => {
         resultsMap.set(obj.id, obj);
-        // Give a high base score for keyword matches to ensure they appear
-        scoresMap.set(obj.id, 0.5);
+        // Recalculate score for map
+        const title = this.normalize(obj.title);
+        const content = this.normalize(obj.content);
+        const tags = obj.tags?.map(t => this.normalize(t)) || [];
+        const text = title + ' ' + content + ' ' + tags.join(' ');
+
+        let score = 0.3; // Base score for any match
+
+        // Exact phrase bonus
+        if (title.includes(normalizedQuery) || content.includes(normalizedQuery)) {
+          score = 0.8;
+        } else if (tokens.length > 0) {
+          // Token match score
+          let matchCount = 0;
+          tokens.forEach(token => {
+            if (text.includes(token)) matchCount++;
+          });
+          score = 0.3 + (matchCount / tokens.length) * 0.4;
+        }
+
+        scoresMap.set(obj.id, score);
       });
 
       // --- 2. Vector Search (Semantic Matches) ---
@@ -1037,6 +1086,340 @@ class LocalDatabase {
     }
   }
 
+  /**
+   * Advanced Search with Filters (Natural Language Query Support)
+   */
+  async advancedSearch(filters: import('../types').SearchFilters): Promise<NexusObject[]> {
+    if (!this.db) return [];
+
+    try {
+      console.log('🔍 [LocalDB] Advanced Search Filters:', filters);
+      const results: NexusObject[] = [];
+      const { query, dateRange, types, keywords, entities, source } = filters;
+
+      // Helper to check date range
+      const isInRange = (date: Date | string) => {
+        if (!dateRange) return true;
+        const start = new Date(dateRange.start);
+        const end = new Date(dateRange.end);
+
+        // If dates are invalid, ignore the filter
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
+
+        const d = new Date(date);
+        return d >= start && d <= end;
+      };
+
+      // --- 1. DOCUMENTS ---
+      if (!source || source === 'all' || source === 'documents') {
+        let docs: NexusObject[] = [];
+
+        // Check if we are looking for TASKS specifically
+        const isTaskSearch = types && types.includes('Task' as any);
+
+        // Check if we have specific filters that require scanning all objects (Types or Tags)
+        // If the user asks for specific Types or Tags, we shouldn't rely on vector search recall.
+        const hasSpecificFilters = (types && types.length > 0) || (filters.tags && filters.tags.length > 0);
+
+        // If query exists AND we don't have specific filters, use vector search for relevance
+        // If we HAVE specific filters (Task, Type, Tag), we fetch ALL objects to ensure we don't miss anything 
+        // that matches the filter but not the vector query.
+        if (query && query.length > 2 && !isTaskSearch && !hasSpecificFilters) {
+          docs = await this.vectorSearch(query);
+        } else {
+          // Otherwise get all objects (needed for Task/Type/Tag search or empty query)
+          docs = await this.getObjects();
+        }
+
+        // Apply Filters
+        docs = docs.filter(doc => {
+          // DEBUG: Log the filters keys to see if 'types' is present
+          // console.log('[LocalDB] Filters keys:', Object.keys(filters));
+          // console.log('[LocalDB] Types filter:', types);
+          // console.log('[LocalDB] Tags filter:', filters.tags);
+
+          // Type Filter
+          if (types && types.length > 0) {
+            const hasTaskFilter = types.includes('Task' as any);
+            const otherTypes = types.filter(t => t !== 'Task' as any);
+
+            let typeMatch = false;
+            // Match standard and dynamic types (case-insensitive and accent-insensitive)
+            if (otherTypes.length > 0) {
+              const normalize = (str: string) => str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              const normalizedDocType = normalize(doc.type);
+
+              // console.log(`[LocalDB] Checking doc "${doc.title}" (type: ${doc.type}, normalized: ${normalizedDocType}) against filters: ${otherTypes.join(', ')}`);
+
+              if (otherTypes.some(t => {
+                // 1. Exact match (original strings)
+                if (t === doc.type) return true;
+
+                const normalizedFilter = normalize(t);
+                // 2. Exact match (normalized)
+                if (normalizedFilter === normalizedDocType) return true;
+
+                // 3. Fuzzy match for English/Spanish suffix (tion/cion)
+                // e.g. "organization" vs "organizacion"
+                const docRoot = normalizedDocType.replace(/t?ion$/, "").replace(/c?ion$/, "");
+                const filterRoot = normalizedFilter.replace(/t?ion$/, "").replace(/c?ion$/, "");
+
+                return docRoot === filterRoot && docRoot.length > 3; // Ensure root is long enough
+              })) {
+                typeMatch = true;
+                // console.log(`[LocalDB] ✓ "${doc.title}" matches type filter`);
+              }
+            }
+            // Match Task type
+            if (hasTaskFilter && doc.extractedTasks && doc.extractedTasks.length > 0) {
+              // Optional: Check if tasks match query status (active/pending)
+              const lowerQuery = (query || '').toLowerCase();
+              if (lowerQuery.includes('active') || lowerQuery.includes('pending') || lowerQuery.includes('activas') || lowerQuery.includes('pendientes')) {
+                if (doc.extractedTasks.some(t => !t.completed)) typeMatch = true;
+              } else {
+                typeMatch = true;
+              }
+            }
+
+            if (!typeMatch) {
+              // console.log(`[LocalDB] ✗ Filtering out "${doc.title}" (type: ${doc.type}) - doesn't match ${types.join(', ')}`);
+              return false;
+            }
+          }
+          // Date Filter
+          if (!isInRange(doc.lastModified)) return false;
+
+          // Tag Filter
+          if (filters.tags && filters.tags.length > 0) {
+            const docTags = doc.tags?.map(t => t.toLowerCase().replace('#', '')) || [];
+            const searchTags = filters.tags.map(t => t.toLowerCase().replace('#', ''));
+            if (!searchTags.some(st => docTags.includes(st))) return false;
+          }
+
+          // Entity/Keyword Filter (Simple inclusion check)
+          if (keywords && keywords.length > 0) {
+            const content = (doc.title + ' ' + doc.content).toLowerCase();
+            if (!keywords.some(k => content.includes(k.toLowerCase()))) return false;
+          }
+
+          return true;
+        });
+
+        results.push(...docs);
+      }
+
+      // --- 2. EMAILS ---
+      if (!source || source === 'all' || source === 'email') {
+        // We can reuse getGmailMessages but we might need more than 10
+        // For now, let's fetch a larger batch or all cached
+        const allEmails = await this.db.getAll('gmail_messages');
+
+        const emailResults = allEmails.filter(email => {
+          // Date Filter
+          if (!isInRange(email.date)) return false;
+
+          // Query/Keyword Filter
+          if (query || (keywords && keywords.length > 0)) {
+            const text = (email.subject + ' ' + email.snippet + ' ' + email.bodyPlain).toLowerCase();
+            const q = (query || '').toLowerCase();
+
+            // Match query OR keywords
+            const matchesQuery = q ? text.includes(q) : true;
+            const matchesKeywords = keywords ? keywords.some(k => text.includes(k.toLowerCase())) : true;
+
+            return matchesQuery && matchesKeywords;
+          }
+
+          return true;
+        }).map(email => ({
+          id: email.id,
+          title: email.subject || 'No Subject',
+          type: NexusType.EMAIL,
+          content: email.snippet || '',
+          lastModified: email.date,
+          tags: ['email'],
+          metadata: [
+            { key: 'from', label: 'From', value: email.from, type: 'text' as const },
+            { key: 'date', label: 'Date', value: email.date.toISOString(), type: 'date' as const }
+          ]
+        }));
+
+        results.push(...emailResults);
+      }
+
+      // --- 3. CALENDAR ---
+      if (!source || source === 'all' || source === 'calendar') {
+        const allEvents = await this.db.getAll('calendar_events');
+
+        const eventResults = allEvents.filter(event => {
+          const start = event.start.dateTime || event.start.date;
+
+          // Date Filter
+          if (!isInRange(start)) return false;
+
+          // Query/Keyword Filter
+          if (query || (keywords && keywords.length > 0)) {
+            const text = (event.summary + ' ' + (event.description || '')).toLowerCase();
+            const q = (query || '').toLowerCase();
+
+            const matchesQuery = q ? text.includes(q) : true;
+            const matchesKeywords = keywords ? keywords.some(k => text.includes(k.toLowerCase())) : true;
+
+            return matchesQuery && matchesKeywords;
+          }
+
+          return true;
+        }).map(event => ({
+          id: event.id,
+          title: event.summary || 'Untitled Event',
+          type: NexusType.MEETING,
+          content: event.description || '',
+          lastModified: new Date(event.start.dateTime || event.start.date),
+          tags: ['calendar', 'meeting'],
+          metadata: [
+            { key: 'date', label: 'Date', value: event.start.dateTime || event.start.date, type: 'date' as const },
+            { key: 'location', label: 'Location', value: event.location, type: 'text' as const }
+          ]
+        }));
+
+        results.push(...eventResults);
+      }
+
+      console.log(`🔍 [LocalDB] Advanced Search found ${results.length} items`);
+
+      // Fallback: If no results found with strict filters, try relaxed search
+      if (results.length === 0 && query && query.length > 2) {
+        console.log('⚠️ [LocalDB] No results with strict filters. Attempting relaxed search...');
+
+        // Relaxed: Ignore Date and Type, just use Vector + Keywords
+        const relaxedDocs = await this.vectorSearch(query);
+        const uniqueIds = new Set<string>();
+
+        relaxedDocs.forEach(doc => {
+          if (!uniqueIds.has(doc.id)) {
+            uniqueIds.add(doc.id);
+            results.push(doc);
+          }
+        });
+
+        // Also check emails/calendar with just keywords
+        if (keywords && keywords.length > 0) {
+          // ... (Simplified keyword search for emails/calendar could go here, 
+          // but for now let's just return vector results to avoid noise)
+        }
+      }
+
+      return results.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+
+    } catch (error) {
+      console.error('[LocalDB] Advanced search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Multi-Source Search (New AI-First Architecture)
+   * UPDATED: Fetches ALL data sources and lets AI do the filtering
+   * This ensures we don't miss exact matches (tags, types, tasks)
+   */
+  async multiSourceSearch(query: string, limit: number = 200): Promise<Array<{
+    id: string;
+    title: string;
+    type: string;
+    content: string;
+    lastModified: Date;
+    tags?: string[];
+    metadata?: any[];
+    source: 'document' | 'email' | 'calendar';
+    extractedTasks?: any[];
+  }>> {
+    if (!this.db) return [];
+
+    try {
+      console.log(`🔍[LocalDB] Multi-source search for: "${query}" (full retrieval mode)`);
+      const results: Array<any> = [];
+
+      // 1. ALL Documents (with tasks)
+      const allDocs = await this.getObjects();
+      console.log(`[LocalDB] DEBUG: Total documents in DB: ${allDocs.length}`);
+
+      // Debug: Check organizations with #smx tag
+      const orgsWithSmx = allDocs.filter(d =>
+        (d.type.toLowerCase().includes('organiz') || d.type.toLowerCase().includes('organiz')) &&
+        d.tags?.some(t => t.toLowerCase().includes('smx'))
+      );
+      console.log(`[LocalDB] DEBUG: Organizations with #smx tag: ${orgsWithSmx.length}`, orgsWithSmx.map(o => o.title));
+
+      // Debug: Check documents with tasks
+      const docsWithTasks = allDocs.filter(d => d.extractedTasks && d.extractedTasks.length > 0);
+      console.log(`[LocalDB] DEBUG: Documents with tasks: ${docsWithTasks.length}`, docsWithTasks.map(d => ({ title: d.title, taskCount: d.extractedTasks.length })));
+
+      const docResults = allDocs.map(d => ({
+        ...d,
+        source: 'document' as const
+      }));
+      results.push(...docResults);
+      console.log(`📄 Loaded ${docResults.length} documents`);
+
+      // 2. ALL Emails (up to 50)
+      const emails = await this.getGmailMessages(50);
+      const emailResults = emails.map(email => ({
+        id: email.id,
+        title: email.subject || 'No Subject',
+        type: 'Email',
+        content: email.bodyPlain || email.snippet || '',
+        lastModified: email.date,
+        tags: ['email'],
+        metadata: [
+          { key: 'from', label: 'From', value: email.from, type: 'text' as const },
+          { key: 'to', label: 'To', value: email.to, type: 'text' as const }
+        ],
+        source: 'email' as const
+      }));
+      results.push(...emailResults);
+      console.log(`📧 Loaded ${emailResults.length} emails`);
+
+      // 3. ALL Calendar Events
+      const allEvents = await this.db.getAll('calendar_events');
+      console.log(`[LocalDB] DEBUG: Calendar events in DB: ${allEvents.length}`);
+      if (allEvents.length > 0) {
+        console.log(`[LocalDB] DEBUG: Sample calendar event:`, allEvents[0]);
+      }
+
+      const eventResults = allEvents.map(event => ({
+        id: event.id,
+        title: event.summary || 'Untitled Event',
+        type: 'Calendar Event', // Changed from 'Meeting' to distinguish from document type
+        content: event.description || '',
+        lastModified: new Date(event.start.dateTime || event.start.date),
+        tags: ['calendar'],
+        metadata: [
+          { key: 'calendarName', label: 'Calendar', value: event.calendarSummary || event.organizer?.email || 'Calendar', type: 'text' as const },
+          { key: 'calendarColor', label: 'Color', value: event.backgroundColor || event.colorId || '#4285f4', type: 'text' as const },
+          { key: 'date', label: 'Date', value: event.start.dateTime || event.start.date, type: 'date' as const },
+          { key: 'location', label: 'Location', value: event.location || '', type: 'text' as const },
+          { key: 'attendees', label: 'Attendees', value: event.attendees?.map((a: any) => a.email).join(', ') || '', type: 'text' as const }
+        ],
+        source: 'calendar' as const,
+        // Add calendar-specific properties for UI rendering
+        calendarColor: event.backgroundColor || event.colorId || '#4285f4',
+        calendarName: event.calendarSummary || event.organizer?.email || 'Calendar'
+      }));
+      results.push(...eventResults);
+      console.log(`📅 Loaded ${eventResults.length} calendar events`);
+
+      console.log(`✅[LocalDB] Multi-source search loaded ${results.length} total items (letting AI filter)`);
+      console.log(`[LocalDB] DEBUG: Result breakdown - Docs: ${docResults.length}, Emails: ${emailResults.length}, Calendar: ${eventResults.length}`);
+
+      // Return ALL results - AI will do the filtering
+      // Note: We don't limit here because the AI needs to see all candidates
+      return results;
+
+    } catch (error) {
+      console.error('[LocalDB] Multi-source search failed:', error);
+      return [];
+    }
+  }
 
 
   // Dashboard methods

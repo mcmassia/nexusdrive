@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Search, Loader2, MessageSquare, X, Sparkles } from 'lucide-react';
+import { Search, X, Sparkles, MessageSquare, Loader2, Calendar } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { NexusObject } from '../types';
@@ -14,10 +15,12 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
   const [mode, setMode] = useState<'search' | 'ai'>('search');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [searchStep, setSearchStep] = useState<'idle' | 'searching' | 'analyzing'>('idle');
   const [response, setResponse] = useState<string | null>(null);
   const [results, setResults] = useState<NexusObject[]>([]);
   const [searchResults, setSearchResults] = useState<NexusObject[]>([]);
   const [typeColors, setTypeColors] = useState<Record<string, string>>({});
+  const [understoodFilters, setUnderstoodFilters] = useState<any>(null);
 
   const [searchTime, setSearchTime] = useState<number | null>(null);
 
@@ -25,21 +28,63 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     e.preventDefault();
     if (!query.trim()) return;
 
-    setIsLoading(true);
-    setResponse(null);
-    setSearchTime(null);
+    if (mode === 'search') {
+      // Classic Search (unchanged)
+      setIsLoading(true);
+      const startTime = performance.now();
+      const localResults = await db.vectorSearch(query);
+      const endTime = performance.now();
+      setSearchTime(endTime - startTime);
+      setSearchResults(localResults);
+      setIsLoading(false);
+    } else {
+      // NEW: AI-First Advanced Search (2-step process)
+      setIsLoading(true);
+      setResponse(null);
+      setResults([]);
+      setUnderstoodFilters(null);
 
-    const startTime = performance.now();
-    const localResults = await db.vectorSearch(query);
-    const endTime = performance.now();
-    setSearchTime(endTime - startTime);
+      try {
+        // Step 1: Multi-Source Search (Broad Retrieval)
+        setSearchStep('searching');
+        const startTime = performance.now();
+        const candidates = await db.multiSourceSearch(query, 100);
+        const endTime = performance.now();
+        setSearchTime(endTime - startTime);
 
-    setResults(localResults);
+        console.log('[AISearch] Found', candidates.length, 'candidates');
 
-    const aiAnswer = await geminiService.generateRAGResponse(query, localResults, lang);
+        // Step 2: AI Analysis & Response
+        setSearchStep('analyzing');
+        const analysis = await geminiService.analyzeAndRespond(query, candidates, lang);
 
-    setResponse(aiAnswer);
-    setIsLoading(false);
+        console.log('[AISearch] AI Analysis:', analysis);
+        console.log('[AISearch] AI identified', analysis.relevantItemIds.length, 'relevant items out of', candidates.length, 'candidates');
+        console.log('[AISearch] Relevant item details:', analysis.relevantItemIds.map(idx => ({
+          idx,
+          title: candidates[idx]?.title,
+          type: candidates[idx]?.type,
+          tags: candidates[idx]?.tags
+        })));
+
+        // Extract filtered results based on relevantItemIds
+        const filteredResults = analysis.relevantItemIds.map(idx => candidates[idx]).filter(Boolean);
+        setResults(filteredResults as NexusObject[]);
+        setResponse(analysis.answerHtml);
+
+        // Store extracted data for potential UI display
+        if (analysis.extractedData) {
+          console.log('[AISearch] Extracted Data:', analysis.extractedData);
+        }
+
+      } catch (error) {
+        console.error("AI Search Error:", error);
+        setResponse(lang === 'es' ? 'Error al procesar la consulta.' : 'Error processing query.');
+      } finally {
+        setIsLoading(false);
+        setSearchStep('idle');
+      }
+    }
   };
 
   // Load type colors on mount
@@ -56,8 +101,6 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
     };
     loadColors();
   }, []);
-
-  // ... (useEffect for colorize)
 
   // Real-time search effect (only in search mode)
   React.useEffect(() => {
@@ -79,7 +122,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
   // Helper to format time
   const formatTime = (ms: number) => {
     const seconds = (ms / 1000).toFixed(2);
-    return `${seconds}s`;
+    return `${seconds} s`;
   };
 
   // Handle clicks on internal links in the AI response
@@ -124,8 +167,6 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
         }
       } else {
         console.warn(`Object with ID ${objectId} not found.`);
-        // Optional: Show a toast or alert
-        // alert(lang === 'es' ? 'Documento no encontrado' : 'Document not found');
       }
     }
   };
@@ -171,7 +212,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
               placeholder={
                 mode === 'search'
                   ? (lang === 'es' ? "Buscar en tus documentos..." : "Search in your documents...")
-                  : (lang === 'es' ? "Pregunta a NexusAI (presiona Enter)" : "Ask NexusAI (press Enter)")
+                  : (lang === 'es' ? "Pregunta a NexusAI (ej: 'Reuniones de la semana pasada')..." : "Ask NexusAI (e.g. 'Meetings from last week')...")
               }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -261,8 +302,21 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
             <>
               {isLoading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 z-10 bg-white/50 dark:bg-black/50 backdrop-blur-sm">
-                  <Loader2 size={32} className="animate-spin mb-3 text-purple-500" />
-                  <p>{lang === 'es' ? 'Pensando y buscando en el Gráfico Local...' : 'Thinking & Retrieving from Local Graph...'}</p>
+                  <div className="flex flex-col items-center gap-4">
+                    <Loader2 size={48} className="animate-spin text-purple-600" />
+                    <div className="text-center space-y-1">
+                      <p className="text-lg font-medium text-slate-700 dark:text-slate-200">
+                        {searchStep === 'understanding' && (lang === 'es' ? 'Analizando tu consulta...' : 'Understanding query...')}
+                        {searchStep === 'searching' && (lang === 'es' ? 'Buscando información...' : 'Searching information...')}
+                        {searchStep === 'synthesizing' && (lang === 'es' ? 'Redactando respuesta...' : 'Synthesizing answer...')}
+                      </p>
+                      {understoodFilters && (
+                        <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                          {understoodFilters.types?.join(', ') || 'All Types'} • {understoodFilters.dateRange ? 'Date Filter' : 'All Time'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -282,13 +336,45 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                       <Sparkles size={14} />
                       NexusAI Answer
                     </h3>
+
+                    {/* Extracted Filters Debug Info */}
+                    {understoodFilters && (
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {understoodFilters.types && understoodFilters.types.map((t: string) => (
+                          <span key={t} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-md border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                            {t}
+                          </span>
+                        ))}
+                        {understoodFilters.tags && understoodFilters.tags.map((t: string) => (
+                          <span key={t} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-md border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                            <span className="text-[10px]">#</span>
+                            {t}
+                          </span>
+                        ))}
+                        {understoodFilters.dateRange && (
+                          <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs rounded-md border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                            <Calendar size={10} />
+                            {new Date(understoodFilters.dateRange.start).toLocaleDateString()} - {new Date(understoodFilters.dateRange.end).toLocaleDateString()}
+                          </span>
+                        )}
+                        {/* DEBUG: Show raw filters */}
+                        <details className="w-full mt-2">
+                          <summary className="text-[10px] text-slate-400 cursor-pointer">Debug Filters</summary>
+                          <pre className="text-[10px] bg-slate-100 dark:bg-slate-900 p-2 rounded mt-1 overflow-x-auto">
+                            {JSON.stringify(understoodFilters, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+
                     <div
                       id="ai-response-content"
                       className="prose prose-lg dark:prose-invert max-w-none 
-                        [&_a]:no-underline [&_a]:hover:underline [&_a]:cursor-pointer [&_a]:font-medium
-                        [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-2
-                        [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2
-                      "
+                          [&_a]:no-underline [&_a]:hover:underline [&_a]:cursor-pointer [&_a]:font-medium
+                          [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-2
+                          [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2
+                        "
                       dangerouslySetInnerHTML={{ __html: response }}
                       onClick={handleContentClick}
                     />
@@ -320,12 +406,12 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
                             <span
                               className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold border"
                               style={{
-                                backgroundColor: typeColors[obj.type] || '#64748b',
+                                backgroundColor: (obj as any).calendarColor || typeColors[obj.type] || '#64748b',
                                 color: '#ffffff',
                                 borderColor: 'transparent'
                               }}
                             >
-                              {obj.type}
+                              {(obj as any).source === 'calendar' ? ((obj as any).calendarName || 'Calendar') : obj.type}
                             </span>
                             <span className="text-[10px] text-slate-400">
                               {new Date(obj.lastModified).toLocaleDateString()}

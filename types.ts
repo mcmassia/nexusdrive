@@ -210,3 +210,13 @@ export interface ConnectedAccount {
   filterSender?: string;
   filterAfterDate?: Date;
 }
+
+export interface SearchFilters {
+  query: string;
+  dateRange?: { start: Date; end: Date };
+  types?: NexusType[]; // e.g. ['Meeting', 'Email']
+  tags?: string[]; // e.g. ['smx', 'urgent']
+  keywords?: string[];
+  entities?: string[]; // People, Projects
+  source?: 'all' | 'documents' | 'email' | 'calendar';
+}
