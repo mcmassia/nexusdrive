@@ -2164,13 +2164,19 @@ class LocalDatabase {
   // App Preferences Methods
   async getAppPreferences(): Promise<AppPreferences> {
     if (!this.db) return { appliedImprovements: [], rejectedImprovements: [] };
-    const prefs = await this.db.get('preferences', 'app');
-    return prefs || { appliedImprovements: [], rejectedImprovements: [] };
+    const stored = await this.db.get('preferences', 'app');
+    // Extract preferences, removing the 'key' field added for storage
+    if (stored) {
+      const { key, ...prefs } = stored as any;
+      return prefs as AppPreferences;
+    }
+    return { appliedImprovements: [], rejectedImprovements: [] };
   }
 
   async saveAppPreferences(prefs: AppPreferences): Promise<void> {
     if (!this.db) return;
-    await this.db.put('preferences', prefs, 'app');
+    // The 'preferences' store uses keyPath: 'key', so we must include key in the object
+    await this.db.put('preferences', { key: 'app', ...prefs });
   }
 
   async getPreferences(): Promise<Preferences> {
