@@ -302,6 +302,16 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         objectType = typeMap[typeString.toLowerCase()] || NexusType.PAGE;
       }
 
+      // Load type schema to get default properties
+      const schema = await db.getTypeSchema(objectType);
+      const metadata = schema?.properties.map(prop => ({
+        key: prop.key,
+        label: prop.label,
+        value: prop.defaultValue || (prop.type === 'documents' ? [] : ''),
+        type: prop.type,
+        allowedTypes: prop.allowedTypes
+      })) || [];
+
       // Create new object
       const newObj: NexusObject = {
         id: Date.now().toString(),
@@ -310,7 +320,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         content: '',
         lastModified: new Date(),
         tags: [],
-        metadata: []
+        metadata
       };
 
       await db.saveObject(newObj);
