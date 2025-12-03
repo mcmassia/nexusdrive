@@ -226,7 +226,7 @@ export class GeminiService {
    * NEW: Analyze and Respond (AI-First Architecture)
    * Takes query + all candidates and asks AI to filter, analyze, and respond
    */
-  async analyzeAndRespond(query: string, candidates: any[], lang: 'en' | 'es' = 'en'): Promise<{
+  async analyzeAndRespond(query: string, candidates: any[], lang: 'en' | 'es' = 'en', settings?: { currentUser?: { personDocumentId: string; name: string } }): Promise<{
     summary: string;
     relevantItemIds: number[];
     extractedData?: {
@@ -253,7 +253,7 @@ export class GeminiService {
 
       const candidatesString = candidates.map((c, i) => {
         let itemStr = `[${i}] Source: ${c.source} | Type: ${c.type} | Title: ${c.title}`;
-        // Increase content length to ensure metadata is included (metadata is appended at end)
+        // Increase content length to ensure important content is visible
         const contentPreview = c.content.substring(0, 1000);
         itemStr += `\nContent: ${contentPreview}${c.content.length > 1000 ? '...' : ''}`;
         if (c.tags && c.tags.length > 0) {
@@ -265,16 +265,68 @@ export class GeminiService {
           itemStr += `\nTasks (${c.extractedTasks.length}): ${taskPreviews.join('; ')}${c.extractedTasks.length > 3 ? '...' : ''}`;
         }
         if (c.metadata && c.metadata.length > 0) {
-          // Reduce metadata for efficiency
-          itemStr += `\nMetadata: ${JSON.stringify(c.metadata).substring(0, 100)}`;
+          // Format metadata in human-readable form for AI
+          const metadataLines = c.metadata
+            .filter(m => m.value && m.type !== 'date')
+            .map(m => {
+              if (m.type === 'documents' && Array.isArray(m.value)) {
+                // This will already be resolved to titles by db.ts if we're using enriched content
+                // But if not, we just show the value as-is
+                return `  ${m.label}: ${Array.isArray(m.value) ? m.value.join(', ') : m.value}`;
+              }
+              return `  ${m.label}: ${m.value}`;
+            });
+
+          if (metadataLines.length > 0) {
+            itemStr += `\nMetadata:\n${metadataLines.join('\n')}`;
+          }
         }
         return itemStr;
       }).join('\n---\n');
 
+      // Build user context section
+      let contextSection = '';
+
+      if (settings?.currentUser) {
+        contextSection += `
+CURRENT USER CONTEXT:
+- Name: ${settings.currentUser.name}
+- Person Document ID: ${settings.currentUser.personDocumentId}
+
+When user says "yo", "mi", "mis", "donde participo", "mis reuniones", they refer to: ${settings.currentUser.name}
+Example: "mis reuniones" → Personas/Equipos contains "${settings.currentUser.name}"
+`;
+      }
+
+      // Collect all aliases from candidates
+      const aliasMap = new Map<string, string>();
+      candidates.forEach((c, i) => {
+        if (c.aliases && Array.isArray(c.aliases) && c.aliases.length > 0) {
+          c.aliases.forEach((alias: string) => {
+            if (alias && alias.trim()) {
+              aliasMap.set(alias.toLowerCase().trim(), `${c.title} (item [${i}])`);
+            }
+          });
+        }
+      });
+
+      if (aliasMap.size > 0) {
+        contextSection += `
+KNOWN ALIASES:
+`;
+        Array.from(aliasMap.entries()).slice(0, 50).forEach(([alias, title]) => {
+          contextSection += `- "${alias}" → ${title}
+`;
+        });
+        if (aliasMap.size > 50) {
+          contextSection += `... and ${aliasMap.size - 50} more aliases\n`;
+        }
+      }
+
       const prompt = `You are analyzing a user's query against their knowledge base.
 
 ${languageInstruction}
-
+${contextSection}
 IMPORTANT CONTEXT:
 - Current Date: ${new Date().toISOString().split('T')[0]} (${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })})
 - Current Week: Week of ${new Date().toLocaleDateString('es-ES', { month: 'long', day: 'numeric' })}

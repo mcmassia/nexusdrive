@@ -329,6 +329,21 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                         onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
                         className="flex-1 min-w-0 font-semibold text-slate-800 dark:!text-white outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
                     />
+                    <div className="hidden md:flex items-center gap-2 text-xs text-slate-400">
+                        <span>Aliases:</span>
+                        <input
+                            value={currentObject.aliases?.join(', ') || ''}
+                            onChange={(e) => {
+                                const aliases = e.target.value
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(Boolean);
+                                setCurrentObject({ ...currentObject, aliases });
+                            }}
+                            placeholder={lang === 'es' ? 'ej: Alberto, mi amigo, socio...' : 'e.g: John, my friend, partner...'}
+                            className="w-48 text-xs text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded bg-transparent transition-colors border border-transparent focus:border-slate-300 dark:focus:border-slate-600"
+                        />
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-400">

@@ -1,0 +1,72 @@
+
+import { GeminiService } from './services/geminiService';
+
+// Mock the API key if needed, or rely on env
+const API_KEY = process.env.VITE_GEMINI_API_KEY || 'TEST_KEY';
+
+async function test() {
+  const gemini = new GeminiService();
+  // We need to mock the AI model initialization or assume it works if key is present
+  // For this test, we might just want to see the PROMPT or mock the response if we can't make real calls.
+  // But since we have the tool to run code, we can try to make a real call if the environment allows.
+  
+  const queries = [
+    "tareas pendientes",
+    "reuniones donde se nombres personas de valencia"
+  ];
+
+  console.log("--- Testing Extraction ---");
+  for (const q of queries) {
+    try {
+        console.log(`\nQuery: "${q}"`);
+        // We can't easily run the real Gemini service without the API key in this context if it's not set in the environment where I run the script.
+        // However, I can inspect the code to see the prompt. 
+        // Let's assume I can't run real AI calls here easily without setup.
+        // Instead, I will simulate what I THINK it returns and verify the logic in db.ts.
+    } catch (e) {
+        console.error(e);
+    }
+  }
+}
+
+// Since I cannot be sure I can make external API calls from this environment to Gemini, 
+// I will focus on inspecting the code and logic first. 
+// The user says "queries don't work".
+
+// Issue 1: "tareas pendientes" -> 0 results.
+// Hypothesis: Gemini returns query="tareas pendientes", types=["Task"].
+// In db.ts: 
+// isTaskSearch = true (if types has Task).
+// if (isTaskSearch) -> getObjects().
+// Then filters:
+// if (hasTaskFilter && doc.extractedTasks) ...
+// It filters by "active" status.
+// If it returns 0 results, maybe the documents don't have `extractedTasks` populated correctly? 
+// Or the "active" filter logic is flawed.
+
+// Issue 2: "reuniones donde se nombres personas de valencia"
+// Hypothesis: Gemini returns query="personas valencia", types=["Reunión"].
+// In db.ts:
+// isTaskSearch = false.
+// vectorSearch("personas valencia") is called.
+// vectorSearch splits into "personas", "valencia".
+// It checks if doc contains BOTH "personas" AND "valencia".
+// The document likely contains "Valencia" but NOT "personas".
+// Result: Document excluded.
+
+// Fix for Issue 2:
+// Relax vectorSearch token matching. It should not be strict AND for all tokens if there are many.
+// Or rely on Vector Similarity more than Keyword matching.
+// Currently vectorSearch does:
+// 1. Keyword Search (Exact & Token Matches) -> adds to results with score 0.5
+// 2. Vector Search -> adds to results if similarity > 0.55
+// 3. Merge.
+
+// If the document is NOT found in Keyword Search (because of strict AND), 
+// AND it is NOT found in Vector Search (maybe similarity < 0.55?), 
+// then it is missing.
+
+// "reuniones donde se nombres personas de valencia"
+// The vector for this sentence might be far from the document content which is just meeting notes.
+// But "Valencia" is a strong keyword.
+

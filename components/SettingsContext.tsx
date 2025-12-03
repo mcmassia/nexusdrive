@@ -1,20 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { AppPreferences } from '../types';
+import { AppPreferences, Preferences } from '../types';
 
 interface SettingsContextType {
     prefs: AppPreferences;
+    preferences: Preferences;
     isFeatureEnabled: (featureId: string) => boolean;
     applyFeature: (featureId: string) => Promise<void>;
     rejectFeature: (featureId: string) => Promise<void>;
     toggleFeature: (featureId: string) => Promise<void>;
     refreshPrefs: () => Promise<void>;
+    updateCurrentUser: (user: { personDocumentId: string; name: string } | undefined) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [prefs, setPrefs] = useState<AppPreferences>({ appliedImprovements: [], rejectedImprovements: [] });
+    const [preferences, setPreferences] = useState<Preferences>({});
 
     useEffect(() => {
         refreshPrefs();
@@ -23,6 +26,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const refreshPrefs = async () => {
         const p = await db.getAppPreferences();
         setPrefs(p);
+        const generalPrefs = await db.getPreferences();
+        setPreferences(generalPrefs);
     };
 
     const isFeatureEnabled = (featureId: string) => {
@@ -84,8 +89,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPrefs(newPrefs);
     };
 
+    const updateCurrentUser = async (user: { personDocumentId: string; name: string } | undefined) => {
+        const newPreferences = { ...preferences, currentUser: user };
+        await db.savePreferences(newPreferences);
+        setPreferences(newPreferences);
+    };
+
     return (
-        <SettingsContext.Provider value={{ prefs, isFeatureEnabled, applyFeature, rejectFeature, toggleFeature, refreshPrefs }}>
+        <SettingsContext.Provider value={{ prefs, preferences, isFeatureEnabled, applyFeature, rejectFeature, toggleFeature, refreshPrefs, updateCurrentUser }}>
             {children}
         </SettingsContext.Provider>
     );

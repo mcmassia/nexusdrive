@@ -4,6 +4,7 @@ import { Search, X, Sparkles, MessageSquare, Loader2, Calendar } from 'lucide-re
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { NexusObject } from '../types';
+import { useSettings } from './SettingsContext';
 
 interface AISearchModalProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface AISearchModalProps {
 }
 
 const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang }) => {
+  const { preferences } = useSettings();
   const [mode, setMode] = useState<'search' | 'ai'>('search');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +58,7 @@ const AISearchModal: React.FC<AISearchModalProps> = ({ onClose, onNavigate, lang
 
         // Step 2: AI Analysis & Response
         setSearchStep('analyzing');
-        const analysis = await geminiService.analyzeAndRespond(query, candidates, lang);
+        const analysis = await geminiService.analyzeAndRespond(query, candidates, lang, preferences);
 
         console.log('[AISearch] AI Analysis:', analysis);
         console.log('[AISearch] AI identified', analysis.relevantItemIds.length, 'relevant items out of', candidates.length, 'candidates');
