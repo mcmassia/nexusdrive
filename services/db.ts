@@ -2175,13 +2175,18 @@ class LocalDatabase {
 
   async getPreferences(): Promise<Preferences> {
     if (!this.db) return {};
-    const prefs = await this.db.get('preferences', 'general');
-    return prefs || {};
+    const stored = await this.db.get('preferences', 'general');
+    // Extract preferences, removing the 'key' field added for storage
+    if (stored) {
+      const { key, ...prefs } = stored as any;
+      return prefs;
+    }
+    return {};
   }
 
   async savePreferences(prefs: Preferences): Promise<void> {
     if (!this.db) return;
-    await this.db.put('preferences', prefs, 'general');
+    await this.db.put('preferences', { key: 'general', ...prefs });
   }
 }
 
