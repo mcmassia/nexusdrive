@@ -113,7 +113,7 @@ class LocalDatabase {
   private async init() {
     try {
       // Open IndexedDB
-      this.db = await openDB<NexusDB>('nexus-db', 10, { // Bump version to 10
+      this.db = await openDB<NexusDB>('nexus-db', 11, { // Bump version to 11 for preferences store
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`[LocalDB] Upgrading database from version ${oldVersion} to ${newVersion}`);
 
@@ -187,6 +187,11 @@ class LocalDatabase {
           if (!db.objectStoreNames.contains('assets')) {
             db.createObjectStore('assets', { keyPath: 'id' });
             console.log('[LocalDB] Created assets store');
+          }
+          // NEW in v11: User preferences store
+          if (!db.objectStoreNames.contains('preferences')) {
+            db.createObjectStore('preferences', { keyPath: 'key' });
+            console.log('[LocalDB] Created preferences store for user context');
           }
         },
       });
