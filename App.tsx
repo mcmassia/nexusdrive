@@ -22,6 +22,7 @@ import { NotificationProvider } from './components/NotificationContext';
 import { NotificationUI } from './components/NotificationUI';
 import { GlobalErrorHandler } from './components/GlobalErrorHandler';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { DatabaseErrorRecovery } from './components/DatabaseErrorRecovery';
 
 import EventDetailsModal from './components/Calendar/EventDetailsModal';
 import { CalendarEvent } from './services/calendarService';
@@ -388,6 +389,12 @@ const App: React.FC = () => {
   };
 
   const t = TRANSLATIONS[lang];
+
+  // Check for database error before rendering app
+  const dbError = localStorage.getItem('nexus_db_error');
+  if (dbError) {
+    return <DatabaseErrorRecovery />;
+  }
 
   if (!user) {
     return <LoginScreen lang={lang} setLang={setLang} />;

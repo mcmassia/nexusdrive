@@ -217,6 +217,21 @@ class LocalDatabase {
       }
     } catch (error) {
       console.error('[LocalDB] Failed to initialize IndexedDB:', error);
+
+      // Check if it's a migration/object store error
+      if (error instanceof Error &&
+        (error.message.includes('object store') ||
+          error.message.includes('VersionError') ||
+          error.message.includes('InvalidStateError'))) {
+        console.error('[LocalDB] Database migration error detected. Flagging for reset.');
+        // Set flag in localStorage for App.tsx to show recovery UI
+        localStorage.setItem('nexus_db_error', JSON.stringify({
+          type: 'migration_error',
+          message: error.message,
+          timestamp: Date.now()
+        }));
+      }
+
       // Fallback to in-memory storage (current implementation)
       this.isInitialized = false;
     }
