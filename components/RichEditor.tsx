@@ -289,8 +289,8 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
         const typeMap: Record<string, NexusType> = {
           'page': NexusType.PAGE,
-          'person': NexusType.PERSON,
-          'persona': NexusType.PERSON,
+          'person': 'Persona' as NexusType,
+          'persona': 'Persona' as NexusType,
           'meeting': NexusType.MEETING,
           'reunión': NexusType.MEETING,
           'reuniones': NexusType.MEETING,
