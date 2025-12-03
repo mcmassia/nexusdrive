@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { AppPreferences, Preferences } from '../types';
-import { useNotification } from './NotificationContext';
 
 interface SettingsContextType {
     prefs: AppPreferences;
@@ -19,7 +18,6 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [prefs, setPrefs] = useState<AppPreferences>({ appliedImprovements: [], rejectedImprovements: [] });
     const [preferences, setPreferences] = useState<Preferences>({});
-    const { addNotification } = useNotification();
 
     useEffect(() => {
         refreshPrefs();
@@ -96,33 +94,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const newPreferences = { ...preferences, currentUser: user };
             await db.savePreferences(newPreferences);
             setPreferences(newPreferences);
-
-            if (user) {
-                addNotification({
-                    type: 'success',
-                    message: '✅ Usuario configurado',
-                    description: `Ahora puedes usar búsquedas como "mis reuniones"`,
-                    duration: 3000
-                });
-            }
         } catch (error) {
             console.error('[SettingsContext] Error updating current user:', error);
-
-            // Check if it's an IndexedDB migration error
+            // Show alert for critical errors
             if (error instanceof Error && error.message.includes('object store')) {
-                addNotification({
-                    type: 'error',
-                    message: '⚠️ Base de Datos Desactualizada',
-                    description: 'Recarga la página con Cmd+Shift+R para actualizar la base de datos',
-                    duration: 10000
-                });
+                alert('⚠️ Base de Datos Desactualizada\n\nRecarga la página con Cmd+Shift+R (Mac) o Ctrl+Shift+R (Windows/Linux) para actualizar la base de datos.');
             } else {
-                addNotification({
-                    type: 'error',
-                    message: 'Error al guardar configuración',
-                    description: error instanceof Error ? error.message : 'Error desconocido',
-                    duration: 5000
-                });
+                alert(`Error al guardar configuración: ${error instanceof Error ? error.message : 'Error desconocido'}`);
             }
         }
     };
