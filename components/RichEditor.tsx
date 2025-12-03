@@ -156,10 +156,32 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
         // Add "Create new" option if no results
         if (filtered.length === 0 && query.trim()) {
+          // Parse type from query early to show correct type in label
+          let displayType = 'Page';
+          const separator = query.includes('/') ? '/' : (query.includes(':') ? ':' : null);
+
+          if (separator) {
+            const [typeString] = query.split(separator);
+            const typeMap: Record<string, string> = {
+              'page': 'Page',
+              'person': 'Persona',
+              'persona': 'Persona',
+              'meeting': 'Meeting',
+              'reunión': 'Meeting',
+              'reuniones': 'Meeting',
+              'cita': 'Cita',
+              'citas': 'Cita',
+              'projects': 'Project',
+              'project': 'Project',
+              'proyectos': 'Project'
+            };
+            displayType = typeMap[typeString.toLowerCase()] || typeString;
+          }
+
           const createOption: NexusObject = {
             id: '__CREATE_NEW__',
             title: query,
-            type: NexusType.PAGE,
+            type: displayType as NexusType,
             content: '',
             lastModified: new Date(),
             tags: [],
@@ -1157,7 +1179,9 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
                   <div className="font-medium text-sm text-slate-900 dark:text-slate-100">
                     {obj.id === '__CREATE_NEW__' ? `Create: ${obj.title}` : obj.title}
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">{obj.type}</div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500">
+                    {obj.type}
+                  </div>
                 </button>
               ))
             ) : <div className="p-2 text-xs text-slate-400 italic text-center">Type to search</div>
