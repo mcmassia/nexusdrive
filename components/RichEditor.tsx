@@ -166,14 +166,16 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
               'page': 'Page',
               'person': 'Persona',
               'persona': 'Persona',
-              'meeting': 'Meeting',
-              'reunión': 'Meeting',
-              'reuniones': 'Meeting',
+              'meeting': 'Reunion',
+              'reunión': 'Reunion',
+              'reunion': 'Reunion',
+              'reuniones': 'Reunion',
               'cita': 'Cita',
               'citas': 'Cita',
-              'projects': 'Project',
-              'project': 'Project',
-              'proyectos': 'Project'
+              'project': 'Proyecto',
+              'projects': 'Proyecto',
+              'proyecto': 'Proyecto',
+              'proyectos': 'Proyecto'
             };
             displayType = typeMap[typeString.toLowerCase()] || typeString;
           }
@@ -313,12 +315,16 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           'page': NexusType.PAGE,
           'person': 'Persona' as NexusType,
           'persona': 'Persona' as NexusType,
-          'meeting': NexusType.MEETING,
-          'reunión': NexusType.MEETING,
-          'reuniones': NexusType.MEETING,
-          'projects': NexusType.PROJECT,
-          'project': NexusType.PROJECT,
-          'proyectos': NexusType.PROJECT
+          'meeting': 'Reunion' as NexusType,
+          'reunión': 'Reunion' as NexusType,
+          'reunion': 'Reunion' as NexusType,
+          'reuniones': 'Reunion' as NexusType,
+          'cita': 'Cita' as NexusType,
+          'citas': 'Cita' as NexusType,
+          'project': 'Proyecto' as NexusType,
+          'projects': 'Proyecto' as NexusType,
+          'proyecto': 'Proyecto' as NexusType,
+          'proyectos': 'Proyecto' as NexusType
         };
 
         objectType = typeMap[typeString.toLowerCase()] || NexusType.PAGE;
