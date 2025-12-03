@@ -343,7 +343,8 @@ const App: React.FC = () => {
     // Check for both enum value and potential schema string mismatch
     if (type === NexusType.DAILY_NOTE || (type as string) === 'DailyNote') {
       const today = new Date();
-      const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+      // Use YYYY-MM-DD format for HTML date inputs
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
       // Check if a Daily note with this date already exists
       const existingNote = objects.find(o => (o.type === NexusType.DAILY_NOTE || (o.type as string) === 'DailyNote') && o.title === dateStr);
