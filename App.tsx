@@ -355,9 +355,16 @@ const App: React.FC = () => {
       }
 
       // Auto-populate Date property if it exists in metadata
-      const datePropIndex = metadata.findIndex(p => p.key === 'date' || p.label === 'Date' || p.label === 'Fecha');
+      const datePropIndex = metadata.findIndex(p =>
+        p.key?.toLowerCase() === 'date' ||
+        p.label?.toLowerCase() === 'date' ||
+        p.label?.toLowerCase() === 'fecha'
+      );
       if (datePropIndex !== -1) {
         metadata[datePropIndex].value = dateStr;
+        console.log('[App] Auto-populated Date property for DailyNote:', dateStr);
+      } else {
+        console.log('[App] No Date property found in DailyNote metadata');
       }
     }
 
