@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../services/db';
 import { NexusObject } from '../types';
-import { Search, X } from 'lucide-react';
+import { Search, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { useNotification } from './NotificationContext';
 
 interface UserSelectorProps {
     currentUser?: {
@@ -16,7 +17,9 @@ export function UserSelector({ currentUser, onSelect }: UserSelectorProps) {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const { addNotification } = useNotification();
 
     useEffect(() => {
         loadPersonDocuments();
@@ -48,8 +51,10 @@ export function UserSelector({ currentUser, onSelect }: UserSelectorProps) {
             console.log('[UserSelector] Sample persona docs:', persons.slice(0, 3).map(d => ({ id: d.id, title: d.title, type: d.type })));
 
             setPersonDocs(persons);
-        } catch (error) {
-            console.error('[UserSelector] Error loading person documents:', error);
+            setError(null);
+        } catch (err) {
+            console.error('[UserSelector] Error loading person documents:', err);
+            setError(err instanceof Error ? err : new Error('Unknown error'));
         } finally {
             setLoading(false);
         }
@@ -59,13 +64,33 @@ export function UserSelector({ currentUser, onSelect }: UserSelectorProps) {
         doc.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleSelect = (doc: NexusObject) => {
-        onSelect({
-            personDocumentId: doc.id,
-            name: doc.title
-        });
-        setSearchTerm('');
-        setIsOpen(false);
+    const handleSelect = async (doc: NexusObject) => {
+        try {
+            onSelect({
+                personDocumentId: doc.id,
+                name: doc.title
+            });
+            setSearchTerm('');
+            setIsOpen(false);
+
+            addNotification({
+                type: 'success',
+                message: '✅ Usuario configurado',
+                description: `Ahora puedes usar búsquedas como "mis reuniones"`,
+                duration: 3000
+            });
+        } catch (err) {
+            console.error('[UserSelector] Error selecting user:', err);
+
+            if (err instanceof Error && err.message.includes('object store')) {
+                addNotification({
+                    type: 'error',
+                    message: '⚠️ Base de Datos Desactualizada',
+                    description: 'Haz clic en "Resetear Base de Datos" abajo',
+                    duration: 10000
+                });
+            }
+        }
     };
 
     const handleClear = () => {
@@ -73,8 +98,62 @@ export function UserSelector({ currentUser, onSelect }: UserSelectorProps) {
         setSearchTerm('');
     };
 
+    const handleResetDatabase = async () => {
+        if (!confirm('⚠️ ¿Resetear la base de datos?\n\nEsto eliminará todos los datos locales y recargará la aplicación.\nTus datos en Google Drive NO se eliminarán.\n\n¿Continuar?')) {
+            return;
+        }
+
+        try {
+            // Delete all IndexedDB databases
+            const databases = await indexedDB.databases();
+            for (const database of databases) {
+                if (database.name) {
+                    indexedDB.deleteDatabase(database.name);
+                    console.log('[UserSelector] Deleted database:', database.name);
+                }
+            }
+
+            // Clear localStorage
+            localStorage.clear();
+
+            // Reload the page
+            window.location.reload();
+        } catch (err) {
+            console.error('[UserSelector] Error resetting database:', err);
+            alert('Error al resetear la base de datos. Recarga manualmente (Cmd/Ctrl + Shift + R)');
+        }
+    };
+
     if (loading) {
         return <div className="text-slate-500 dark:text-slate-400">Cargando...</div>;
+    }
+
+    // Show error with reset option
+    if (error && error.message.includes('object store')) {
+        return (
+            <div className="space-y-3">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                        <AlertCircle className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" size={20} />
+                        <div className="flex-1">
+                            <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                                ⚠️ Base de Datos Desactualizada
+                            </h4>
+                            <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                                Tu base de datos necesita actualizarse. Resetea la base de datos para continuar.
+                            </p>
+                            <button
+                                onClick={handleResetDatabase}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium"
+                            >
+                                <RefreshCw size={16} />
+                                Resetear Base de Datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
