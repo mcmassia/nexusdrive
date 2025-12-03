@@ -599,6 +599,103 @@ class DriveService {
     }
 
     /**
+     * Perform a full sync from Drive - lists ALL files recursively and imports them
+     * Use this for initial sync on new installations
+     */
+    async fullSyncFromDrive(): Promise<{ imported: number, errors: number }> {
+        const token = authService.getAccessToken();
+        if (!token || !this.isInitialized || !this.nexusFolderId) {
+            console.error('[DriveService] Cannot full sync - not initialized');
+            return { imported: 0, errors: 0 };
+        }
+
+        console.log('🔄 [DriveService] Starting FULL SYNC from Drive...');
+        let imported = 0;
+        let errors = 0;
+
+        try {
+            // Get all files recursively from Nexus folder
+            const allFiles = await this.listAllFilesRecursive(this.nexusFolderId);
+            console.log(`📁 [DriveService] Found ${allFiles.length} total files in Drive`);
+
+            // Filter out folders, only process documents
+            const documents = allFiles.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+            console.log(`📄 [DriveService] ${documents.length} documents to import`);
+
+            // Import each document
+            for (const file of documents) {
+                try {
+                    console.log(`[DriveService] Importing: ${file.name} (${file.id})`);
+                    const obj = await this.readObject(file.id);
+
+                    if (obj) {
+                        // Save to IndexedDB via db
+                        const { db } = await import('./db');
+                        await db.saveObject({ ...obj, driveFileId: file.id });
+                        imported++;
+                        console.log(`✅ [DriveService] Imported: ${obj.title}`);
+                    } else {
+                        console.warn(`⚠️ [DriveService] Skipped: ${file.name} (could not parse)`);
+                    }
+                } catch (error) {
+                    console.error(`❌ [DriveService] Error importing ${file.name}:`, error);
+                    errors++;
+                }
+            }
+
+            console.log(`✅ [DriveService] Full sync complete: ${imported} imported, ${errors} errors`);
+
+            // After full sync, get a new page token for incremental syncs
+            const tokenResponse = await this.fetchWithAuth(
+                `${this.baseUrl}/changes/startPageToken`
+            );
+            const data = await tokenResponse.json();
+            this.startPageToken = data.startPageToken;
+            console.log(`✅ [DriveService] Set page token for future incremental syncs`);
+
+        } catch (error) {
+            console.error('[DriveService] Full sync failed:', error);
+            errors++;
+        }
+
+        return { imported, errors };
+    }
+
+    /**
+     * List all files recursively from a folder
+     */
+    private async listAllFilesRecursive(folderId: string): Promise<DriveFile[]> {
+        const token = authService.getAccessToken();
+        if (!token) return [];
+
+        const files: DriveFile[] = [];
+        let pageToken: string | undefined;
+
+        do {
+            const query = `'${folderId}' in parents and trashed=false`;
+            const url = `${this.baseUrl}/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,mimeType,modifiedTime,appProperties)${pageToken ? `&pageToken=${pageToken}` : ''}`;
+
+            const response = await this.fetchWithAuth(url);
+            const data = await response.json();
+
+            if (data.files) {
+                files.push(...data.files);
+
+                // For each subfolder, recursively get its files
+                const subfolders = data.files.filter((f: DriveFile) => f.mimeType === 'application/vnd.google-apps.folder');
+                for (const subfolder of subfolders) {
+                    const subFiles = await this.listAllFilesRecursive(subfolder.id);
+                    files.push(...subFiles);
+                }
+            }
+
+            pageToken = data.nextPageToken;
+        } while (pageToken);
+
+        return files;
+    }
+
+    /**
      * Helper: Fetch with authentication
      */
     private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {

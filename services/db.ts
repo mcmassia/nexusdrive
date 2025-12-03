@@ -302,6 +302,19 @@ class LocalDatabase {
     if (!this.db || authService.isInDemoMode()) return;
 
     try {
+      // Check if we have any local objects - if not, do a full sync
+      const localCount = await this.db.count('objects');
+      console.log(`[LocalDB] Local objects count: ${localCount}`);
+
+      if (localCount === 0) {
+        console.log('[LocalDB] No local objects found - performing FULL SYNC');
+        const result = await driveService.fullSyncFromDrive();
+        console.log(`[LocalDB] Full sync result: ${result.imported} imported, ${result.errors} errors`);
+        return;
+      }
+
+      // Otherwise, do incremental sync
+      console.log('[LocalDB] Performing incremental sync...');
       const changes = await driveService.fetchChanges();
 
       for (const change of changes.changes) {
