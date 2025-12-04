@@ -558,33 +558,12 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     }
   };
 
-  // Colorize mentions on mount and content change
+  // Process Content: Resolve Assets, Hydrate Links, Colorize Mentions
   useEffect(() => {
-    const colorizeMentions = async () => {
+    const processContent = async () => {
       if (!editorRef.current) return;
 
-      const schemas = await db.getAllTypeSchemas();
-      if (!editorRef.current) return; // Check again after async call
-
-      const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
-
-      const mentions = editorRef.current.querySelectorAll('.nexus-mention');
-      mentions.forEach(mention => {
-        const type = (mention as HTMLElement).dataset.objectType;
-        if (type && schemaMap.has(type)) {
-          (mention as HTMLElement).style.color = schemaMap.get(type) || '#3b82f6';
-        }
-      });
-    };
-
-    colorizeMentions();
-  }, [initialContent, isUserEditing]); // Re-run when content changes
-
-  // Resolve Asset URLs (Images)
-  useEffect(() => {
-    const resolveAssets = async () => {
-      if (!editorRef.current) return;
-
+      // 1. Resolve Asset URLs (Images)
       const images = editorRef.current.querySelectorAll('img');
       images.forEach(async (img) => {
         const src = img.getAttribute('src');
@@ -595,21 +574,62 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
             if (asset) {
               const url = URL.createObjectURL(asset.blob);
               img.src = url;
-              // Store the blob URL on the element to revoke it later if needed
               (img as any)._blobUrl = url;
-            } else {
-              console.warn(`Asset not found: ${assetId}`);
             }
           } catch (error) {
             console.error(`Failed to load asset ${assetId}:`, error);
           }
         }
       });
+
+      // 2. Hydrate Drive Links to Mentions
+      if (allObjects && allObjects.length > 0) {
+        const links = editorRef.current.querySelectorAll('a');
+        links.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href && href.includes('docs.google.com/document/d/')) {
+            // Check if already hydrated
+            if (link.classList.contains('nexus-mention')) return;
+
+            const match = href.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (match && match[1]) {
+              const driveId = match[1];
+              const obj = allObjects.find(o => o.driveFileId === driveId);
+
+              if (obj) {
+                // Upgrade to mention
+                link.classList.add('nexus-mention');
+                link.dataset.objectId = obj.id;
+                link.dataset.objectType = obj.type;
+                // We keep the href as is for fallback, but click handler will intercept
+              }
+            }
+          }
+        });
+      }
+
+      // 3. Colorize Mentions (including newly hydrated ones)
+      const schemas = await db.getAllTypeSchemas();
+      if (!editorRef.current) return;
+
+      const schemaMap = new Map(schemas.map(s => [s.type, s.color]));
+      const mentions = editorRef.current.querySelectorAll('.nexus-mention');
+
+      mentions.forEach(mention => {
+        const type = (mention as HTMLElement).dataset.objectType;
+        if (type && schemaMap.has(type)) {
+          const color = schemaMap.get(type) || '#3b82f6';
+          (mention as HTMLElement).style.color = color;
+          (mention as HTMLElement).style.textDecoration = 'underline';
+          (mention as HTMLElement).style.cursor = 'pointer';
+          (mention as HTMLElement).style.fontWeight = '500';
+        }
+      });
     };
 
-    resolveAssets();
+    processContent();
 
-    // Cleanup function to revoke object URLs
+    // Cleanup function
     return () => {
       if (editorRef.current) {
         const images = editorRef.current.querySelectorAll('img');
@@ -621,7 +641,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         });
       }
     };
-  }, [initialContent]); // Re-run when content changes
+  }, [initialContent, isUserEditing, allObjects]);
 
   // Intercept all link clicks (generic)
   useEffect(() => {
