@@ -549,20 +549,33 @@ class LocalDatabase {
    * Get all objects
    */
   async getObjects(): Promise<NexusObject[]> {
-    if (!this.db) {
-      // Fallback to in-memory for demo mode
-      return [...INITIAL_OBJECTS];
-    }
+    if (!this.db) return [];
 
     try {
+      console.log(`[LocalDB] Retrieving all objects from DB...`);
       const objects = await this.db.getAll('objects');
-      return objects.map(obj => {
-        const { driveFileId, ...nexusObj } = obj;
-        return nexusObj;
-      });
+      console.log(`[LocalDB] Retrieved ${objects.length} objects.`);
+      return objects;
     } catch (error) {
-      console.error('[LocalDB] Failed to get objects:', error);
+      console.error('[LocalDB] Error retrieving objects:', error);
       return [];
+    }
+  }
+
+  /**
+   * Clear all objects from IndexedDB
+   * Used for forcing a full sync
+   */
+  async clearAllObjects(): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      console.log('[LocalDB] Clearing all objects...');
+      await this.db.clear('objects');
+      console.log('[LocalDB] All objects cleared successfully');
+    } catch (error) {
+      console.error('[LocalDB] Error clearing objects:', error);
+      throw error;
     }
   }
 

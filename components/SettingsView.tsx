@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
-import { Database, Mail, User, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { Database, Mail, User, Settings as SettingsIcon, Sparkles, RefreshCw } from 'lucide-react';
 import TypeManager from './TypeManager';
 import GmailConfig from './GmailConfig';
 import ImprovementsPanel from './ImprovementsPanel';
 import { UserContextSettings } from './UserContextSettings';
+import SyncSettings from './SyncSettings';
 
 import { NexusObject } from '../types';
 
 interface SettingsViewProps {
     lang: 'en' | 'es';
     objects: NexusObject[];
-    initialTab?: 'types' | 'gmail' | 'user' | 'improvements';
+    initialTab?: 'types' | 'gmail' | 'user' | 'improvements' | 'sync';
     initialImprovementFilter?: 'all' | 'pending' | 'applied' | 'rejected';
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects, initialTab = 'types', initialImprovementFilter }) => {
-    const [activeTab, setActiveTab] = useState<'types' | 'gmail' | 'user' | 'improvements'>(initialTab);
+    const [activeTab, setActiveTab] = useState<'types' | 'gmail' | 'user' | 'improvements' | 'sync'>(initialTab);
 
     return (
         <div className="flex h-full bg-slate-50 dark:bg-black/10">
@@ -74,6 +75,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects, initialTab =
                         <Sparkles size={20} className={activeTab === 'improvements' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
                         {lang === 'es' ? 'Mejoras' : 'Improvements'}
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('sync')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'sync'
+                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                    >
+                        <RefreshCw size={20} />
+                        {lang === 'es' ? 'Sincronización' : 'Sync'}
+                    </button>
                 </nav>
             </div>
 
@@ -83,6 +95,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ lang, objects, initialTab =
                 {activeTab === 'gmail' && <GmailConfig lang={lang} />}
                 {activeTab === 'user' && <UserContextSettings lang={lang} />}
                 {activeTab === 'improvements' && <ImprovementsPanel lang={lang} initialFilter={initialImprovementFilter} />}
+                {activeTab === 'sync' && <SyncSettings lang={lang} />}
             </div>
         </div>
     );
