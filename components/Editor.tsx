@@ -115,6 +115,19 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         setCurrentObject(object);
         setContent(object.content);
 
+        // Check for missing content (lazy load trigger)
+        // If content is empty but we have a Drive ID, try to fetch the full content
+        if ((!object.content || object.content.trim() === '') && object.driveFileId) {
+            console.log('[Editor] Content missing, triggering lazy load for:', object.title);
+            db.getObjectById(object.id).then(fullObj => {
+                if (fullObj && fullObj.content && fullObj.content !== object.content) {
+                    console.log('[Editor] Lazy load complete, updating content.');
+                    setCurrentObject(fullObj);
+                    setContent(fullObj.content);
+                }
+            });
+        }
+
         // Load type schema for this object type
         db.getAllTypeSchemas().then(schemas => {
             setAvailableSchemas(schemas);
