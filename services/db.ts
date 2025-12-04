@@ -721,10 +721,9 @@ class LocalDatabase {
 
       // Find all mentions of the target document
       const mentions = htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`);
+      const contexts: MentionContext[] = [];
 
       if (mentions.length > 0) {
-        const contexts: MentionContext[] = [];
-
         mentions.forEach((mention, index) => {
           // Get parent block (paragraph, list item, div, heading)
           let block = mention.closest('p, li, div[class*="block"], h1, h2, h3, h4, h5, h6');
@@ -764,16 +763,37 @@ class LocalDatabase {
             });
           }
         });
+      }
 
-        if (contexts.length > 0) {
-          backlinks.push({
-            sourceDocId: doc.id,
-            sourceDocTitle: doc.title,
-            sourceDocType: doc.type,
-            sourceDocDate: doc.lastModified,
-            mentionContexts: contexts
-          });
-        }
+      // NEW: Check Metadata Properties for links
+      if (doc.metadata) {
+        doc.metadata.forEach(prop => {
+          let isMatch = false;
+
+          if (prop.type === 'document' && prop.value === targetDocId) {
+            isMatch = true;
+          } else if (prop.type === 'documents' && Array.isArray(prop.value) && prop.value.includes(targetDocId)) {
+            isMatch = true;
+          }
+
+          if (isMatch) {
+            contexts.push({
+              contextText: `Linked via property: ${prop.label}`,
+              mentionPosition: 0,
+              timestamp: new Date()
+            });
+          }
+        });
+      }
+
+      if (contexts.length > 0) {
+        backlinks.push({
+          sourceDocId: doc.id,
+          sourceDocTitle: doc.title,
+          sourceDocType: doc.type,
+          sourceDocDate: doc.lastModified,
+          mentionContexts: contexts
+        });
       }
     }
 
