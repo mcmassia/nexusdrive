@@ -435,7 +435,7 @@ class DriveService {
 
         // Try to get existing object from local db to preserve metadata
         const { db } = await import('./db');
-        const existingObj = await db.getObjectById(objectId);
+        const existingObj = await db.getObjectById(objectId, true); // Skip lazy load to avoid recursion
 
         // Extract content by removing the frontmatter table
         // The table is followed by an HR tag, so we split on that

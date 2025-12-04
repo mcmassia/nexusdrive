@@ -594,7 +594,7 @@ class LocalDatabase {
     }
   }
 
-  async getObjectById(id: string): Promise<NexusObject | null> {
+  async getObjectById(id: string, skipLazyLoad: boolean = false): Promise<NexusObject | null> {
     if (!this.db) {
       console.warn('[LocalDB] Database not initialized');
       return null;
@@ -604,7 +604,7 @@ class LocalDatabase {
       const obj = await this.db.get('objects', id);
       if (obj) {
         // Check if it's a stub or missing content
-        if ((obj.isStub || !obj.content) && obj.driveFileId && !authService.isInDemoMode()) {
+        if ((obj.isStub || !obj.content) && obj.driveFileId && !authService.isInDemoMode() && !skipLazyLoad) {
           console.log(`📥 [LocalDB] Lazy loading content for ${obj.title} from Drive...`);
           console.trace(`[LocalDB] Lazy load triggered by:`); // Added trace
           try {
