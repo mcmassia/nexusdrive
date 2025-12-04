@@ -60,7 +60,7 @@ interface NexusDB extends DBSchema {
   };
   gmail_preferences: {
     key: string; // 'default'
-    value: GmailPreferences;
+    value: GmailPreferences & { id: string };
   };
   app_preferences: {
     key: string; // 'default'
@@ -2195,7 +2195,8 @@ class LocalDatabase {
     if (!this.db) return;
 
     try {
-      await this.db.put('gmail_preferences', { ...prefs });
+      // Ensure 'id' is present for the store keyPath
+      await this.db.put('gmail_preferences', { id: 'default', ...prefs } as GmailPreferences & { id: string });
       console.log('[LocalDB] Saved Gmail preferences');
     } catch (error) {
       console.error('[LocalDB] Failed to save Gmail preferences:', error);

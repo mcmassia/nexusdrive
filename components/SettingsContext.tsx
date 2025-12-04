@@ -24,6 +24,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, []);
 
     const refreshPrefs = async () => {
+        await db.waitForInit();
         const p = await db.getAppPreferences();
         setPrefs(p);
         const generalPrefs = await db.getPreferences();

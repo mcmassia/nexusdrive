@@ -25,6 +25,7 @@ const GmailConfig: React.FC<GmailConfigProps> = ({ lang }) => {
     }, []);
 
     const loadPreferences = async () => {
+        await db.waitForInit();
         const p = await db.getGmailPreferences();
         setPrefs(p);
     };

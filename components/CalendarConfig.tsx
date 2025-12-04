@@ -31,6 +31,7 @@ const CalendarConfig: React.FC<CalendarConfigProps> = ({ lang, onClose }) => {
     const loadData = async () => {
         setIsLoading(true);
         try {
+            await db.waitForInit();
             const [prefs, gmailPrefs] = await Promise.all([
                 db.getCalendarPreferences(),
                 db.getGmailPreferences()
