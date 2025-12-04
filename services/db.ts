@@ -606,6 +606,7 @@ class LocalDatabase {
         // Check if it's a stub or missing content
         if ((obj.isStub || !obj.content) && obj.driveFileId && !authService.isInDemoMode()) {
           console.log(`📥 [LocalDB] Lazy loading content for ${obj.title} from Drive...`);
+          console.trace(`[LocalDB] Lazy load triggered by:`); // Added trace
           try {
             const driveObj = await driveService.readObject(obj.driveFileId);
             if (driveObj) {
@@ -715,15 +716,16 @@ class LocalDatabase {
     for (const doc of allDocs) {
       if (doc.id === targetDocId) continue;
 
-      // Parse HTML content to find mentions
-      const parser = new DOMParser();
-      const htmlDoc = parser.parseFromString(doc.content, 'text/html');
-
-      // Find all mentions of the target document
-      const mentions = htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`);
       const contexts: MentionContext[] = [];
 
-      if (mentions.length > 0) {
+      // 1. Parse HTML content to find mentions (ONLY if content exists and not stub)
+      if (doc.content && !doc.isStub) {
+        const parser = new DOMParser();
+        const htmlDoc = parser.parseFromString(doc.content, 'text/html');
+
+        // Find all mentions of the target document
+        const mentions = htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`);
+
         mentions.forEach((mention, index) => {
           // Get parent block (paragraph, list item, div, heading)
           let block = mention.closest('p, li, div[class*="block"], h1, h2, h3, h4, h5, h6');
@@ -765,7 +767,7 @@ class LocalDatabase {
         });
       }
 
-      // NEW: Check Metadata Properties for links
+      // 2. Check Metadata Properties for links
       if (doc.metadata) {
         doc.metadata.forEach(prop => {
           let isMatch = false;

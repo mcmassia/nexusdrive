@@ -387,7 +387,9 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
     mention.style.cssText = `color: ${color}; text-decoration: underline; cursor: pointer; font-weight: 500;`;
 
-    mention.addEventListener('click', () => {
+    mention.addEventListener('click', (e) => {
+      e.preventDefault(); // Prevent opening in Drive
+      e.stopPropagation();
       if (onMentionClick) {
         onMentionClick(obj.id);
       }
@@ -620,6 +622,52 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       }
     };
   }, [initialContent]); // Re-run when content changes
+
+  // Intercept all link clicks (generic)
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (!href) return;
+
+        // Check if it's a Drive link
+        if (href.includes('docs.google.com/document/d/')) {
+          const match = href.match(/\/d\/([a-zA-Z0-9-_]+)/);
+          if (match && match[1]) {
+            const driveId = match[1];
+            // Find object with this Drive ID
+            const obj = allObjects?.find(o => o.driveFileId === driveId);
+            if (obj && onMentionClick) {
+              e.preventDefault();
+              e.stopPropagation();
+              onMentionClick(obj.id);
+              return;
+            }
+          }
+        }
+
+        // Check if it's an internal anchor link
+        if (href.startsWith('#nexus-id-')) {
+          const id = href.replace('#nexus-id-', '');
+          if (onMentionClick) {
+            e.preventDefault();
+            e.stopPropagation();
+            onMentionClick(id);
+            return;
+          }
+        }
+      }
+    };
+
+    editor.addEventListener('click', handleLinkClick);
+    return () => editor.removeEventListener('click', handleLinkClick);
+  }, [allObjects, onMentionClick]);
 
   const triggerChange = () => {
     if (editorRef.current) {
