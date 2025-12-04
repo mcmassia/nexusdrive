@@ -260,7 +260,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
         return (
           <input
             type="number"
-            value={prop.value as string}
+            value={(prop.value as string) || ''}
             onChange={(e) => handleValueChange(index, e.target.value)}
             className="w-full bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
             placeholder="0"
@@ -453,7 +453,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           <div className="flex gap-2">
             <input
               type="text"
-              value={prop.value as string}
+              value={(prop.value as string) || ''}
               onChange={(e) => handleValueChange(index, e.target.value)}
               className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
               placeholder="https://..."
@@ -477,7 +477,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
             <div className="flex gap-2">
               <input
                 type="text"
-                value={prop.value as string}
+                value={(prop.value as string) || ''}
                 onChange={(e) => handleValueChange(index, e.target.value)}
                 className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
                 placeholder="Image URL..."
@@ -513,7 +513,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           <div className="flex gap-2">
             <input
               type="email"
-              value={prop.value as string}
+              value={(prop.value as string) || ''}
               onChange={(e) => handleValueChange(index, e.target.value)}
               className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
               placeholder="example@email.com"
@@ -534,7 +534,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           <div className="flex gap-2">
             <input
               type="tel"
-              value={prop.value as string}
+              value={(prop.value as string) || ''}
               onChange={(e) => handleValueChange(index, e.target.value)}
               className="flex-1 bg-transparent outline-none focus:text-blue-600 dark:focus:text-blue-400 text-slate-800 dark:text-slate-200"
               placeholder="+1 234 567 890"
@@ -569,7 +569,7 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
           <div className="relative group flex gap-2">
             <input
               type="text"
-              value={prop.value as string}
+              value={(prop.value as string) || ''}
               onChange={(e) => handleValueChange(index, e.target.value)}
               onClick={(e) => {
                 if (isUrl && (e.metaKey || e.ctrlKey)) {

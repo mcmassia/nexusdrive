@@ -92,6 +92,7 @@ export interface NexusObject {
   extractedTasks?: NexusTask[];
   pinned?: boolean;
   aliases?: string[]; // Alternative names/terms for this document
+  isStub?: boolean; // If true, content is missing and needs to be fetched from Drive
 }
 
 export interface GraphNode extends SimulationNodeDatum {

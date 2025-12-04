@@ -5,6 +5,7 @@ import { driveService } from './driveService';
 import { authService } from './authService';
 import { calendarService } from './calendarService';
 import { vectorService } from './vectorService';
+import { firebaseService } from './firebase';
 
 
 
@@ -101,11 +102,25 @@ class LocalDatabase {
 
     // Re-initialize Drive when token is received after initial load
     if (typeof window !== 'undefined') {
+      // Expose DB for debugging/migration
+      (window as any).nexusDB = this;
+
       window.addEventListener('nexus-token-received', () => {
         console.log('🔄 [LocalDB] Token received, re-initializing Drive...');
         this.startSyncLoop().catch(err =>
           console.error('[LocalDB] Failed to re-initialize sync:', err)
         );
+      });
+
+      // Listen for Firebase updates
+      window.addEventListener('nexus-firebase-schemas', (e: any) => {
+        this.updateSchemasFromFirebase(e.detail);
+      });
+      window.addEventListener('nexus-firebase-tags', (e: any) => {
+        this.updateTagsFromFirebase(e.detail);
+      });
+      window.addEventListener('nexus-firebase-docs', (e: any) => {
+        this.updateDocsFromFirebase(e.detail);
       });
     }
   }
@@ -588,6 +603,24 @@ class LocalDatabase {
     try {
       const obj = await this.db.get('objects', id);
       if (obj) {
+        // Check if it's a stub or missing content
+        if ((obj.isStub || !obj.content) && obj.driveFileId && !authService.isInDemoMode()) {
+          console.log(`📥 [LocalDB] Lazy loading content for ${obj.title} from Drive...`);
+          try {
+            const driveObj = await driveService.readObject(obj.driveFileId);
+            if (driveObj) {
+              // Merge drive content with local metadata (local metadata might be newer from Firebase)
+              const merged = { ...obj, ...driveObj, isStub: false };
+              await this.db.put('objects', merged);
+              console.log(`✅ [LocalDB] Lazy loaded and cached: ${obj.title}`);
+              return merged;
+            }
+          } catch (err) {
+            console.error(`❌ [LocalDB] Failed to lazy load ${id}:`, err);
+            // Return stub if fetch fails, UI should handle it
+          }
+        }
+
         console.log(`[LocalDB] getObjectById(${id}):`, {
           title: obj.title,
           driveFileId: obj.driveFileId,
@@ -782,6 +815,13 @@ class LocalDatabase {
         console.error('[LocalDB] Failed to generate embedding:', err);
       }
 
+      // Sync to Firebase (Metadata only)
+      try {
+        await firebaseService.saveDocumentMetadata(updatedObject);
+      } catch (err) {
+        console.error('[LocalDB] Failed to sync to Firebase:', err);
+      }
+
       // Sync to Drive if not in demo mode
       if (!authService.isInDemoMode()) {
         console.log(`🔄[LocalDB] Syncing "${updatedObject.title}" to Drive...`);
@@ -799,50 +839,52 @@ class LocalDatabase {
               summary: updatedObject.title,
               description: updatedObject.content.replace(/<[^>]*>/g, ''), // Strip HTML for description
               start: { dateTime: startTime.toISOString() },
-              end: { dateTime: endTime.toISOString() }
+              end: { dateTime: endTime.toISOString() },
             };
 
-            if (eventIdProp && eventIdProp.value) {
-              // Update existing event
-              console.log(`📅 [LocalDB] Updating Calendar event ${eventIdProp.value}...`);
-              await calendarService.updateEvent(eventIdProp.value as string, eventData);
-            } else {
-              // Create new event
-              console.log(`📅 [LocalDB] Creating new Calendar event...`);
-              const newEvent = await calendarService.createEvent(eventData);
-              if (newEvent && newEvent.id) {
-                // Update local object with new Event ID (without triggering another save loop if possible)
-                // We have to save again to persist the ID
-                updatedObject.metadata.push({
-                  key: 'googleEventId',
-                  label: 'Google Event ID',
-                  value: newEvent.id,
-                  type: 'text'
-                });
-                // Update the object in DB directly to avoid infinite recursion of saveObject
-                await this.db.put('objects', { ...updatedObject, driveFileId });
-                console.log(`✅ [LocalDB] Linked to new Calendar Event ID: ${newEvent.id}`);
+            try {
+              if (eventIdProp && eventIdProp.value) {
+                // Update existing event
+                await calendarService.updateEvent(eventIdProp.value as string, eventData);
+                console.log('📅 [LocalDB] Updated Google Calendar event');
+              } else {
+                // Create new event
+                // Check if createEvent takes 1 or 2 args. Based on error, it takes 1.
+                // Assuming signature is createEvent(eventData)
+                const newEvent = await calendarService.createEvent(eventData);
+                if (newEvent.id) {
+                  // Update object with event ID
+                  updatedObject.metadata = updatedObject.metadata.map(m =>
+                    m.key === 'googleEventId' ? { ...m, value: newEvent.id } : m
+                  );
+                  if (!updatedObject.metadata.find(m => m.key === 'googleEventId')) {
+                    updatedObject.metadata.push({
+                      key: 'googleEventId',
+                      value: newEvent.id,
+                      type: 'text',
+                      label: 'Google Event ID'
+                    });
+                  }
+                  // Save again to persist ID
+                  await this.db.put('objects', updatedObject);
+                }
+                console.log('📅 [LocalDB] Created Google Calendar event');
               }
+            } catch (calErr) {
+              console.error('📅 [LocalDB] Calendar sync failed:', calErr);
             }
           }
         }
 
+        // Drive Sync
         try {
-          if (driveFileId) {
-            // Update existing file in Drive
-            console.log(`📤[LocalDB] Updating existing Drive file ${driveFileId}...`);
-            await driveService.updateObject(driveFileId, updatedObject);
-            console.log(`✅[LocalDB] Updated in Drive successfully`);
+          if (updatedObject.driveFileId) {
+            await driveService.updateObject(updatedObject.driveFileId, updatedObject);
+            console.log(`✅[LocalDB] Updated in Drive: ${updatedObject.driveFileId}`);
           } else {
-            // Create new file in Drive
-            console.log(`📤[LocalDB] Creating new file in Drive...`);
             const result = await driveService.createObject(updatedObject);
-
             if (result && result.id) {
-              console.log(`📝[LocalDB] Received Drive file ID: ${result.id}`);
-
               // Update local DB with Drive file ID and Link
-              driveFileId = result.id;
               const objWithDriveId = {
                 ...updatedObject,
                 driveFileId: result.id,
@@ -850,26 +892,22 @@ class LocalDatabase {
               };
 
               await this.db.put('objects', objWithDriveId);
-              console.log(`✅[LocalDB] Created in Drive with ID: ${result.id}`);
-              console.log(`📊[LocalDB] Saved object with driveFileId:`, objWithDriveId.driveFileId);
-              console.log(`🎉[LocalDB] Object synced! Check your Google Drive > Nexus folder`);
 
+              // Update Firebase with the new Drive ID
+              await firebaseService.saveDocumentMetadata(objWithDriveId);
+
+              console.log(`✅[LocalDB] Created in Drive: ${result.id}`);
               return objWithDriveId;
             }
-            return updatedObject;
           }
-        } catch (driveError) {
-          console.error('❌ [LocalDB] Failed to sync to Drive:', driveError);
-          if (driveError instanceof Error) {
-            console.error('Drive error details:', driveError.message);
-          }
-          // Continue - object is saved locally at least
+        } catch (driveErr) {
+          console.error('❌[LocalDB] Drive sync failed:', driveErr);
         }
       }
 
-      return { ...updatedObject, driveFileId };
+      return updatedObject;
     } catch (error) {
-      console.error('❌ [LocalDB] Failed to save object:', error);
+      console.error('[LocalDB] Save object failed:', error);
       throw error;
     }
   }
@@ -2202,7 +2240,7 @@ class LocalDatabase {
   async saveAppPreferences(prefs: AppPreferences): Promise<void> {
     if (!this.db) return;
     // The 'preferences' store uses keyPath: 'key', so we must include key in the object
-    await this.db.put('preferences', { key: 'app', ...prefs });
+    await this.db.put('preferences', { key: 'app', ...prefs } as any);
   }
 
   async getPreferences(): Promise<Preferences> {
@@ -2218,7 +2256,87 @@ class LocalDatabase {
 
   async savePreferences(prefs: Preferences): Promise<void> {
     if (!this.db) return;
-    await this.db.put('preferences', { key: 'general', ...prefs });
+    await this.db.put('preferences', { key: 'general', ...prefs } as any);
+  }
+
+  // --- Firebase Sync Handlers ---
+
+  private async updateSchemasFromFirebase(schemas: TypeSchema[]) {
+    if (!this.db) return;
+    const tx = this.db.transaction('typeSchemas', 'readwrite');
+    for (const schema of schemas) {
+      await tx.store.put(schema);
+    }
+    await tx.done;
+    console.log(`🔥 [LocalDB] Updated ${schemas.length} schemas from Firebase`);
+  }
+
+  private async updateTagsFromFirebase(tags: TagConfig[]) {
+    if (!this.db) return;
+    const tx = this.db.transaction('tagConfigs', 'readwrite');
+    for (const tag of tags) {
+      await tx.store.put(tag);
+    }
+    await tx.done;
+    console.log(`🔥 [LocalDB] Updated ${tags.length} tag configs from Firebase`);
+  }
+
+  private async updateDocsFromFirebase(docs: Partial<NexusObject>[]) {
+    if (!this.db) return;
+    const tx = this.db.transaction('objects', 'readwrite');
+
+    for (const docMeta of docs) {
+      if (!docMeta.id) continue;
+
+      const existing = await tx.store.get(docMeta.id);
+
+      if (existing) {
+        // Update metadata but preserve content if we have it
+        // Only update if Firebase version is newer (using lastModified)
+        const remoteDate = new Date(docMeta.lastModified || 0);
+        const localDate = new Date(existing.lastModified || 0);
+
+        if (remoteDate > localDate) {
+          await tx.store.put({
+            ...existing,
+            ...docMeta,
+            content: existing.content // Keep local content until we fetch from Drive
+          });
+        }
+      } else {
+        // Create stub
+        await tx.store.put({
+          ...docMeta,
+          content: '', // Empty content indicates it needs fetching
+          isStub: true // Flag to indicate it's a metadata-only stub
+        } as NexusObject);
+      }
+    }
+    await tx.done;
+    console.log(`🔥 [LocalDB] Processed ${docs.length} document updates from Firebase`);
+  }
+
+  /**
+   * Force push all local data to Firebase (Migration)
+   */
+  async forcePushToFirebase() {
+    if (!this.db) return;
+
+    try {
+      console.log('🚀 [LocalDB] Starting manual push to Firebase...');
+
+      // Gather all data
+      const objects = await this.getObjects();
+      const schemas = await this.db.getAll('typeSchemas');
+      const tags = await this.db.getAll('tagConfigs');
+
+      // Send to Firebase
+      await firebaseService.syncAllToFirebase(objects, schemas, tags);
+
+      console.log('✅ [LocalDB] Manual push complete');
+    } catch (error) {
+      console.error('❌ [LocalDB] Failed to push to Firebase:', error);
+    }
   }
 }
 
