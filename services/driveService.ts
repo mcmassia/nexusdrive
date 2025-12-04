@@ -623,9 +623,10 @@ class DriveService {
             console.log(`📄 [DriveService] ${documents.length} documents to import`);
 
             // Import each document
-            for (const file of documents) {
+            for (let i = 0; i < documents.length; i++) {
+                const file = documents[i];
                 try {
-                    console.log(`[DriveService] Importing: ${file.name} (${file.id})`);
+                    console.log(`[DriveService] Importing ${i + 1}/${documents.length}: ${file.name} (${file.id})`);
                     const obj = await this.readObject(file.id);
 
                     if (obj) {
@@ -633,29 +634,46 @@ class DriveService {
                         const { db } = await import('./db');
                         await db.saveObject({ ...obj, driveFileId: file.id });
                         imported++;
-                        console.log(`✅ [DriveService] Imported: ${obj.title}`);
+                        console.log(`✅ [DriveService] Imported ${i + 1}/${documents.length}: ${obj.title}`);
                     } else {
                         console.warn(`⚠️ [DriveService] Skipped: ${file.name} (could not parse)`);
                     }
                 } catch (error) {
                     console.error(`❌ [DriveService] Error importing ${file.name}:`, error);
+
+                    // Check if it's an auth error
+                    if (error instanceof Error && (error.message.includes('401') || error.message.includes('token'))) {
+                        console.error('🔐 [DriveService] Authentication error during sync. Token may have expired.');
+                        throw new Error('Tu sesión expiró durante la sincronización. Por favor, cierra sesión y vuelve a iniciar sesión, luego intenta de nuevo.');
+                    }
+
                     errors++;
+
+                    // Stop if too many errors
+                    if (errors > 10) {
+                        throw new Error(`Demasiados errores (${errors}). Sincronización cancelada.`);
+                    }
                 }
             }
 
             console.log(`✅ [DriveService] Full sync complete: ${imported} imported, ${errors} errors`);
 
             // After full sync, get a new page token for incremental syncs
-            const tokenResponse = await this.fetchWithAuth(
-                `${this.baseUrl}/changes/startPageToken`
-            );
-            const data = await tokenResponse.json();
-            this.startPageToken = data.startPageToken;
-            console.log(`✅ [DriveService] Set page token for future incremental syncs`);
+            try {
+                const tokenResponse = await this.fetchWithAuth(
+                    `${this.baseUrl}/changes/startPageToken`
+                );
+                const data = await tokenResponse.json();
+                this.startPageToken = data.startPageToken;
+                console.log(`✅ [DriveService] Set page token for future incremental syncs`);
+            } catch (tokenError) {
+                console.warn('⚠️ [DriveService] Could not set page token, incremental sync may not work:', tokenError);
+            }
 
         } catch (error) {
             console.error('[DriveService] Full sync failed:', error);
             errors++;
+            throw error; // Re-throw to let UI handle it
         }
 
         return { imported, errors };
