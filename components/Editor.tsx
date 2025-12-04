@@ -292,61 +292,66 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right-10 duration-200 transition-colors">
-            {/* Toolbar */}
-            <div className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-sm text-slate-400 shrink-0">/ Nexus /</span>
+            {/* Toolbar - Split into 2 rows */}
+            <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 transition-colors flex flex-col">
+                {/* Row 1: Title & Context */}
+                <div className="h-12 border-b border-slate-100 dark:border-slate-800/50 flex items-center px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-sm text-slate-400 shrink-0">/ Nexus /</span>
 
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsTypeMenuOpen(!isTypeMenuOpen)}
-                            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded transition-colors flex items-center gap-1"
-                        >
-                            {currentObject.type}
-                            <span className="text-slate-400 text-xs">▼</span>
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsTypeMenuOpen(!isTypeMenuOpen)}
+                                className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                            >
+                                {currentObject.type}
+                                <span className="text-slate-400 text-xs">▼</span>
+                            </button>
 
-                        {isTypeMenuOpen && (
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
-                                {availableSchemas.map(schema => (
-                                    <button
-                                        key={schema.type}
-                                        onClick={() => handleTypeChange(schema.type)}
-                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2
-                                            ${currentObject.type === schema.type ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-700 dark:text-slate-200'}
-                                        `}
-                                    >
-                                        <span className="text-lg">{schema.icon}</span>
-                                        {schema.type}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <span className="text-sm text-slate-400 shrink-0">/</span>
-                    <input
-                        value={currentObject.title || ''}
-                        onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
-                        className="flex-1 min-w-0 font-semibold text-slate-800 dark:!text-white outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
-                    />
-                    <div className="hidden md:flex items-center gap-2 text-xs text-slate-400">
-                        <span>Aliases:</span>
+                            {isTypeMenuOpen && (
+                                <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                    {availableSchemas.map(schema => (
+                                        <button
+                                            key={schema.type}
+                                            onClick={() => handleTypeChange(schema.type)}
+                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2
+                                                ${currentObject.type === schema.type ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-700 dark:text-slate-200'}
+                                            `}
+                                        >
+                                            <span className="text-lg">{schema.icon}</span>
+                                            {schema.type}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <span className="text-sm text-slate-400 shrink-0">/</span>
                         <input
-                            value={currentObject.aliases?.join(', ') || ''}
-                            onChange={(e) => {
-                                const aliases = e.target.value
-                                    .split(',')
-                                    .map(s => s.trim())
-                                    .filter(Boolean);
-                                setCurrentObject({ ...currentObject, aliases });
-                            }}
-                            placeholder={lang === 'es' ? 'ej: Alberto, mi amigo, socio...' : 'e.g: John, my friend, partner...'}
-                            className="w-48 text-xs text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded bg-transparent transition-colors border border-transparent focus:border-slate-300 dark:focus:border-slate-600"
+                            value={currentObject.title || ''}
+                            onChange={(e) => setCurrentObject({ ...currentObject, title: e.target.value })}
+                            className="flex-1 min-w-0 font-semibold text-slate-800 dark:!text-white outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 -ml-2 rounded bg-transparent transition-colors"
                         />
+                        <div className="hidden md:flex items-center gap-2 text-xs text-slate-400">
+                            <span>Aliases:</span>
+                            <input
+                                value={currentObject.aliases?.join(', ') || ''}
+                                onChange={(e) => {
+                                    const aliases = e.target.value
+                                        .split(',')
+                                        .map(s => s.trim())
+                                        .filter(Boolean);
+                                    setCurrentObject({ ...currentObject, aliases });
+                                }}
+                                placeholder={lang === 'es' ? 'ej: Alberto, mi amigo, socio...' : 'e.g: John, my friend, partner...'}
+                                className="w-48 text-xs text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded bg-transparent transition-colors border border-transparent focus:border-slate-300 dark:focus:border-slate-600"
+                            />
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400">
+
+                {/* Row 2: Actions */}
+                <div className="h-12 flex items-center justify-between px-6 bg-white dark:bg-slate-900 shrink-0 transition-colors">
+                    <span className="text-xs text-slate-400 mr-auto">
                         {isSaving
                             ? t.saving
                             : (currentObject.driveFileId
@@ -356,112 +361,114 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                         }
                     </span>
 
-                    <button
-                        onClick={handleAutoTag}
-                        className="flex items-center gap-2 px-3 py-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors text-sm font-medium"
-                        title="AI Auto-Tag"
-                    >
-                        <Sparkles size={16} />
-                        <span className="hidden sm:inline">Auto-Tag</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleAutoTag}
+                            className="flex items-center gap-2 px-3 py-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors text-sm font-medium"
+                            title="AI Auto-Tag"
+                        >
+                            <Sparkles size={16} />
+                            <span className="hidden sm:inline">Auto-Tag</span>
+                        </button>
 
-                    <button
-                        onClick={async () => {
-                            const updated = { ...currentObject, pinned: !currentObject.pinned };
-                            await db.saveObject(updated);
-                            setCurrentObject(updated);
-                            onSave(updated); // Propagate change
-                        }}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium ${currentObject.pinned ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                        title={currentObject.pinned ? (lang === 'es' ? 'Desfijar' : 'Unpin') : (lang === 'es' ? 'Fijar' : 'Pin')}
-                    >
-                        <Pin size={16} fill={currentObject.pinned ? "currentColor" : "none"} />
-                        <span className="hidden sm:inline">{lang === 'es' ? (currentObject.pinned ? 'Fijado' : 'Fijar') : (currentObject.pinned ? 'Pinned' : 'Pin')}</span>
-                    </button>
+                        <button
+                            onClick={async () => {
+                                const updated = { ...currentObject, pinned: !currentObject.pinned };
+                                await db.saveObject(updated);
+                                setCurrentObject(updated);
+                                onSave(updated); // Propagate change
+                            }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium ${currentObject.pinned ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                            title={currentObject.pinned ? (lang === 'es' ? 'Desfijar' : 'Unpin') : (lang === 'es' ? 'Fijar' : 'Pin')}
+                        >
+                            <Pin size={16} fill={currentObject.pinned ? "currentColor" : "none"} />
+                            <span className="hidden sm:inline">{lang === 'es' ? (currentObject.pinned ? 'Fijado' : 'Fijar') : (currentObject.pinned ? 'Pinned' : 'Pin')}</span>
+                        </button>
 
-                    {/* Templates Button */}
-                    {(typeSchema?.templates && typeSchema.templates.length > 0) && (
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsTemplateMenuOpen(!isTemplateMenuOpen)}
-                                className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
-                                title="Templates"
-                            >
-                                <LayoutTemplate size={16} />
-                                <span className="hidden sm:inline">Templates</span>
-                            </button>
+                        {/* Templates Button */}
+                        {(typeSchema?.templates && typeSchema.templates.length > 0) && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsTemplateMenuOpen(!isTemplateMenuOpen)}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
+                                    title="Templates"
+                                >
+                                    <LayoutTemplate size={16} />
+                                    <span className="hidden sm:inline">Templates</span>
+                                </button>
 
-                            {isTemplateMenuOpen && (
-                                <div className="absolute top-full right-0 mt-1 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
-                                    <div className="px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1">
-                                        Apply Template
+                                {isTemplateMenuOpen && (
+                                    <div className="absolute top-full right-0 mt-1 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700 mb-1">
+                                            Apply Template
+                                        </div>
+                                        {typeSchema.templates.map(template => (
+                                            <button
+                                                key={template.id}
+                                                onClick={() => handleApplyTemplate(template)}
+                                                className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between group"
+                                            >
+                                                <span className="text-slate-700 dark:text-slate-200">{template.name}</span>
+                                                {template.isDefault && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">Default</span>}
+                                            </button>
+                                        ))}
                                     </div>
-                                    {typeSchema.templates.map(template => (
-                                        <button
-                                            key={template.id}
-                                            onClick={() => handleApplyTemplate(template)}
-                                            className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between group"
-                                        >
-                                            <span className="text-slate-700 dark:text-slate-200">{template.name}</span>
-                                            {template.isDefault && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">Default</span>}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        )}
 
-                    <a
-                        href={currentObject.driveWebViewLink || (currentObject.driveFileId ? `https://docs.google.com/document/d/${currentObject.driveFileId}/edit` : '#')}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                            if (!currentObject.driveFileId && !currentObject.driveWebViewLink) {
-                                e.preventDefault();
-                                addNotification({
-                                    type: 'warning',
-                                    message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
-                                    description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
-                                    duration: 5000
-                                });
-                            }
-                        }}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
-                            ${(currentObject.driveFileId || currentObject.driveWebViewLink)
-                                ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                        title="Open in Drive"
-                    >
-                        <ExternalLink size={16} />
-                        <span className="hidden sm:inline">Drive</span>
-                    </a>
+                        <a
+                            href={currentObject.driveWebViewLink || (currentObject.driveFileId ? `https://docs.google.com/document/d/${currentObject.driveFileId}/edit` : '#')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => {
+                                if (!currentObject.driveFileId && !currentObject.driveWebViewLink) {
+                                    e.preventDefault();
+                                    addNotification({
+                                        type: 'warning',
+                                        message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                                        description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                                        duration: 5000
+                                    });
+                                }
+                            }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
+                                ${(currentObject.driveFileId || currentObject.driveWebViewLink)
+                                    ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                    : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                            title="Open in Drive"
+                        >
+                            <ExternalLink size={16} />
+                            <span className="hidden sm:inline">Drive</span>
+                        </a>
 
-                    <button
-                        onClick={handleSave}
-                        className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
-                    >
-                        <Save size={16} />
-                        <span className="hidden sm:inline">{t.save}</span>
-                    </button>
+                        <button
+                            onClick={handleSave}
+                            className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
+                        >
+                            <Save size={16} />
+                            <span className="hidden sm:inline">{t.save}</span>
+                        </button>
 
-                    <button
-                        onClick={handleDelete}
-                        className="flex items-center gap-2 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors text-sm font-medium"
-                        title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}
-                    >
-                        <Trash2 size={16} />
-                        <span className="hidden sm:inline">{lang === 'es' ? 'Borrar' : 'Delete'}</span>
-                    </button>
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors text-sm font-medium"
+                            title={lang === 'es' ? 'Eliminar documento' : 'Delete document'}
+                        >
+                            <Trash2 size={16} />
+                            <span className="hidden sm:inline">{lang === 'es' ? 'Borrar' : 'Delete'}</span>
+                        </button>
 
-                    <button
-                        onClick={onClose}
-                        className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
-                        title={t.close}
-                    >
-                        <X size={16} />
-                        <span className="hidden sm:inline">{t.close}</span>
-                    </button>
+                        <button
+                            onClick={onClose}
+                            className="flex items-center gap-2 px-3 py-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-sm font-medium"
+                            title={t.close}
+                        >
+                            <X size={16} />
+                            <span className="hidden sm:inline">{t.close}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 

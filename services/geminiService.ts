@@ -267,7 +267,7 @@ export class GeminiService {
         if (c.metadata && c.metadata.length > 0) {
           // Format metadata in human-readable form for AI
           const metadataLines = c.metadata
-            .filter(m => m.value && m.type !== 'date')
+            .filter(m => m.value)
             .map(m => {
               if (m.type === 'documents' && Array.isArray(m.value)) {
                 // This will already be resolved to titles by db.ts if we're using enriched content

@@ -450,12 +450,15 @@ class DriveService {
             }
         }
 
+        // Restore content structure (tasks, checkboxes)
+        const processedContent = this.restoreContentStructure(content);
+
         // If we have an existing object, preserve its metadata and properties
         if (existingObj) {
             return {
                 ...existingObj,
                 title: fileData.name.replace('.gdoc', ''),
-                content: content,
+                content: processedContent,
                 lastModified: new Date(fileData.modifiedTime),
                 driveFileId: fileData.id, // Update Drive file ID
                 driveWebViewLink: fileData.webViewLink // Map webViewLink
@@ -467,7 +470,7 @@ class DriveService {
             id: objectId,
             title: fileData.name.replace('.gdoc', ''),
             type: (fileData.appProperties?.nexus_type_id as NexusType) || NexusType.PAGE,
-            content: content,
+            content: processedContent,
             lastModified: new Date(fileData.modifiedTime),
             tags: [],
             metadata: [],
@@ -476,6 +479,81 @@ class DriveService {
         };
 
         return obj;
+    }
+
+    /**
+     * Restore Nexus-specific structure (tasks, checkboxes) from Google Docs HTML
+     */
+    private restoreContentStructure(html: string): string {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // 1. Restore Tasks (TAREA/REALIZADO)
+            // Find all elements containing exactly "TAREA" or "REALIZADO"
+            // We use a TreeWalker to find text nodes
+            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            const nodesToProcess: { node: Node, text: string }[] = [];
+
+            while (node = walker.nextNode()) {
+                const text = node.textContent?.trim();
+                if (text === 'TAREA' || text === 'REALIZADO' || text === '☐' || text === '☑') {
+                    nodesToProcess.push({ node, text });
+                }
+            }
+
+            // Process collected nodes
+            nodesToProcess.forEach(({ node, text }) => {
+                const parent = node.parentElement;
+                if (!parent) return;
+
+                if (text === 'TAREA' || text === 'REALIZADO') {
+                    // Check if it's likely a task tag (e.g. short text content in parent)
+                    // Google Docs might wrap it in a span with style
+                    if (parent.textContent?.trim() === text) {
+                        const isDone = text === 'REALIZADO';
+
+                        // Re-apply Nexus classes
+                        parent.classList.add('nexus-task-tag');
+                        parent.classList.add(isDone ? 'done' : 'task');
+
+                        // Add Tailwind classes for local rendering
+                        const baseClasses = ['text-white', 'px-2', 'py-0.5', 'rounded', 'text-xs', 'font-bold', 'mr-2', 'cursor-pointer', 'select-none'];
+                        if (isDone) {
+                            parent.classList.add('bg-green-700', ...baseClasses);
+                        } else {
+                            parent.classList.add('bg-red-500', ...baseClasses);
+                        }
+
+                        parent.dataset.status = isDone ? 'done' : 'todo';
+                        parent.contentEditable = 'false';
+
+                        // Clean up inline styles that might conflict or be redundant
+                        // parent.removeAttribute('style'); // Optional: keep styles if we want to preserve Drive look
+                    }
+                } else if (text === '☐' || text === '☑') {
+                    // Restore Checkbox
+                    const input = doc.createElement('input');
+                    input.type = 'checkbox';
+                    input.className = 'nexus-checkbox mr-2 cursor-pointer';
+                    input.checked = text === '☑';
+
+                    // If the parent only contains this char, replace parent
+                    if (parent.textContent?.trim() === text) {
+                        parent.replaceWith(input);
+                    } else {
+                        // Otherwise replace the text node
+                        node.parentNode?.replaceChild(input, node);
+                    }
+                }
+            });
+
+            return doc.body.innerHTML;
+        } catch (e) {
+            console.error('[DriveService] Error restoring content structure:', e);
+            return html;
+        }
     }
 
     /**
@@ -838,6 +916,37 @@ class DriveService {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
         const { db } = await import('./db');
+
+        // 0. Process Tasks & Checkboxes (Prepare for Drive)
+        // Convert custom elements to Drive-compatible formats with inline styles
+        const tasks = doc.querySelectorAll('.nexus-task-tag');
+        tasks.forEach(task => {
+            const el = task as HTMLElement;
+            const isDone = el.classList.contains('done') || el.dataset.status === 'done';
+
+            // Inline styles for Google Docs
+            // We use !important to ensure they stick, though Google Docs might strip that
+            el.style.cssText = isDone
+                ? 'background-color: #15803d; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10pt; display: inline-block; margin-right: 8px;'
+                : 'background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10pt; display: inline-block; margin-right: 8px;';
+
+            // Ensure text content is correct
+            el.textContent = isDone ? 'REALIZADO' : 'TAREA';
+        });
+
+        const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            const input = cb as HTMLInputElement;
+            const span = doc.createElement('span');
+            // Use unicode characters for checkboxes
+            span.textContent = input.checked ? '☑' : '☐';
+            span.style.cssText = 'font-family: Arial, sans-serif; font-size: 12pt; margin-right: 8px;';
+            span.className = 'nexus-checkbox-placeholder'; // Marker for restoration
+
+            if (input.parentNode) {
+                input.parentNode.replaceChild(span, input);
+            }
+        });
 
         // 1. Process Images (Upload to Drive)
         const images = doc.querySelectorAll('img');
