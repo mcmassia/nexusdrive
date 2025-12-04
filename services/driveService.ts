@@ -440,14 +440,24 @@ class DriveService {
         // Extract content by removing the frontmatter table
         // The table is followed by an HR tag, so we split on that
         let content = html;
-        const hrIndex = html.indexOf('<hr');
+        const hrIndex = html.toLowerCase().indexOf('<hr');
+
+        console.log(`[DriveService] Parsing HTML for ${fileData.name}:`, {
+            totalLength: html.length,
+            hrIndex,
+            hasFrontmatter: hrIndex > 0
+        });
+
         if (hrIndex > 0) {
             // Find the end of the HR tag
             const hrEndIndex = html.indexOf('>', hrIndex);
             if (hrEndIndex > 0) {
                 // Content starts after the HR tag
                 content = html.substring(hrEndIndex + 1).trim();
+                console.log(`[DriveService] Content extracted, length: ${content.length}`);
             }
+        } else {
+            console.warn(`[DriveService] No <hr> tag found in ${fileData.name}. Using full HTML.`);
         }
 
         // Restore content structure (tasks, checkboxes)
