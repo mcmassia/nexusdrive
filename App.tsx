@@ -252,6 +252,7 @@ const App: React.FC = () => {
   }, [isDarkMode]);
 
   const loadData = async () => {
+    await db.waitForInit();
     const allObjects = await db.getObjects();
     setObjects(allObjects);
     const graphData = await db.getGraphData();

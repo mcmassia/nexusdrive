@@ -96,9 +96,10 @@ class LocalDatabase {
   private db: IDBPDatabase<NexusDB> | null = null;
   private syncInterval: number | null = null;
   private isInitialized = false;
+  private initPromise: Promise<void>;
 
   constructor() {
-    this.init();
+    this.initPromise = this.init();
 
     // Re-initialize Drive when token is received after initial load
     if (typeof window !== 'undefined') {
@@ -123,6 +124,10 @@ class LocalDatabase {
         this.updateDocsFromFirebase(e.detail);
       });
     }
+  }
+
+  async waitForInit() {
+    await this.initPromise;
   }
 
   private async init() {
