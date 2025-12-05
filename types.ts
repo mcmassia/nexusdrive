@@ -44,7 +44,8 @@ export interface TagConfig {
 
 // Configuration for object types
 
-export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select' | 'url' | 'email' | 'phone' | 'checkbox' | 'image';
+export type PropertyType = 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select' | 'url' | 'email' | 'phone' | 'checkbox' | 'image' | 'rating' | 'tags';
+
 
 export interface PropertyDefinition {
   key: string;

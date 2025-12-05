@@ -21,7 +21,8 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ schema, onSave, onCance
     const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
     const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
-    const propertyTypes: PropertyType[] = ['text', 'number', 'date', 'document', 'documents', 'multiselect', 'select', 'url', 'email', 'phone', 'checkbox', 'image'];
+    const propertyTypes: PropertyType[] = ['text', 'number', 'date', 'document', 'documents', 'multiselect', 'select', 'url', 'email', 'phone', 'checkbox', 'image', 'rating', 'tags'];
+
 
     // --- Properties Logic ---
 
@@ -510,8 +511,8 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ schema, onSave, onCance
                                         <button
                                             onClick={() => handleSetDefaultTemplate(template.id)}
                                             className={`text-xs flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors ${template.isDefault
-                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium'
-                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                                                 }`}
                                         >
                                             {template.isDefault ? <Check size={12} /> : null}

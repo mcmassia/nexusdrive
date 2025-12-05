@@ -41,6 +41,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
     }, [object]);
 
     const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);
+    const [availableTags, setAvailableTags] = useState<string[]>([]);
     const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
     const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
 
@@ -137,6 +138,11 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
         // Load all objects for navigation
         db.getObjects().then(setObjects);
+
+        // Load available tags
+        db.getTagStats().then(stats => {
+            setAvailableTags(Array.from(stats.keys()));
+        });
     }, [object]);
 
     const handleTypeChange = async (newType: NexusType) => {
@@ -513,6 +519,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                                 }
                             }}
                             lang={lang}
+                            availableTags={availableTags}
                         />
                     </div>
 

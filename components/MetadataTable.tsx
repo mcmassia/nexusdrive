@@ -11,6 +11,7 @@ interface MetadataTableProps {
   typeSchema?: TypeSchema;
   availableSchemas?: TypeSchema[];
   onDocumentClick?: (documentId: string) => void;
+  availableTags?: string[]; // List of all available tags for autocomplete
   lang: 'en' | 'es';
 }
 
@@ -18,7 +19,7 @@ const normalizeText = (text: string) => {
   return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
-const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, availableSchemas = [], onDocumentClick, lang }) => {
+const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRemove, onTagClick, allObjects = [], typeSchema, availableSchemas = [], onDocumentClick, availableTags = [], lang }) => {
   const [suggestionBox, setSuggestionBox] = useState<{
     visible: boolean;
     top: number;
@@ -547,6 +548,134 @@ const MetadataTable: React.FC<MetadataTableProps> = ({ object, onChange, onTagRe
                 Call 📞
               </a>
             )}
+          </div>
+        );
+
+      case 'rating':
+        return (
+          <div className="flex gap-1 items-center h-full">
+            {[1, 2, 3, 4, 5].map((star) => {
+              const currentRating = parseInt(prop.value as string || '0', 10);
+              const isFilled = star <= currentRating;
+
+              return (
+                <button
+                  key={star}
+                  onClick={() => handleValueChange(index, star.toString())}
+                  className={`p-0.5 rounded transition-transform hover:scale-110 focus:outline-none ${isFilled
+                      ? 'text-yellow-400 dark:text-yellow-400'
+                      : 'text-slate-300 dark:text-slate-600 hover:text-yellow-200 dark:hover:text-yellow-900'
+                    }`}
+                  title={`${star} Star${star > 1 ? 's' : ''}`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill={isFilled ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth={isFilled ? "0" : "2"}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="lucide lucide-star"
+                  >
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </button>
+              );
+            })}
+            {prop.value && prop.value !== '0' && (
+              <button
+                onClick={() => handleValueChange(index, '0')}
+                className="ml-2 text-xs text-slate-400 hover:text-red-500 opacity-50 hover:opacity-100"
+                title="Clear rating"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        );
+
+      case 'tags':
+        // Reuse logic from multiselect but with tag styling and autocomplete from availableTags
+        const rawTags = prop.value || [];
+        const selectedTags = Array.isArray(rawTags) ? rawTags : (rawTags as string).split(',').filter(Boolean);
+        const [tagInput, setTagInput] = useState('');
+        const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+
+        // Filter suggestions based on input
+        const filteredTags = availableTags
+          .filter(t => !selectedTags.includes(t) && t.toLowerCase().includes(tagInput.toLowerCase().replace(/^#/, '')))
+          .slice(0, 5);
+
+        return (
+          <div className="flex flex-col gap-2 relative">
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map((tag, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-full text-xs font-semibold text-white flex items-center gap-1"
+                  style={{ backgroundColor: '#10b981' }} // Use default tag color or lookup
+                >
+                  #{tag.replace(/^#/, '')}
+                  <button
+                    onClick={() => {
+                      const newSelected = selectedTags.filter((_, idx) => idx !== i);
+                      handleValueChange(index, newSelected);
+                    }}
+                    className="hover:bg-white/20 rounded-full w-4 h-4 flex items-center justify-center -mr-1"
+                  >×</button>
+                </span>
+              ))}
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => {
+                    setTagInput(e.target.value);
+                    setShowTagSuggestions(true);
+                  }}
+                  onBlur={() => setTimeout(() => setShowTagSuggestions(false), 200)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = tagInput.trim().replace(/^#/, '');
+                      if (val && !selectedTags.includes(val)) {
+                        handleValueChange(index, [...selectedTags, val]);
+                        setTagInput('');
+                        setShowTagSuggestions(false);
+                      }
+                    } else if (e.key === 'Backspace' && !tagInput && selectedTags.length > 0) {
+                      const newSelected = selectedTags.slice(0, -1);
+                      handleValueChange(index, newSelected);
+                    }
+                  }}
+                  placeholder="+ #tag"
+                  className="bg-transparent outline-none text-xs min-w-[60px] h-6 focus:border-b focus:border-blue-500 transition-colors"
+                />
+
+                {showTagSuggestions && tagInput && filteredTags.length > 0 && (
+                  <div className="absolute top-full left-0 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-lg mt-1 w-40 max-h-40 overflow-y-auto">
+                    {filteredTags.map(tag => (
+                      <button
+                        key={tag}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur
+                          handleValueChange(index, [...selectedTags, tag]);
+                          setTagInput('');
+                          setShowTagSuggestions(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         );
 
