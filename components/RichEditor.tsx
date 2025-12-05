@@ -311,23 +311,27 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
         const [typeString, ...titleParts] = objectTitle.split(separator);
         objectTitle = titleParts.join(separator).trim();
 
-        const typeMap: Record<string, NexusType> = {
-          'page': NexusType.PAGE,
-          'person': 'Persona' as NexusType,
-          'persona': 'Persona' as NexusType,
-          'meeting': 'Reunion' as NexusType,
-          'reunión': 'Reunion' as NexusType,
-          'reunion': 'Reunion' as NexusType,
-          'reuniones': 'Reunion' as NexusType,
-          'cita': 'Cita' as NexusType,
-          'citas': 'Cita' as NexusType,
-          'project': 'Proyecto' as NexusType,
-          'projects': 'Proyecto' as NexusType,
-          'proyecto': 'Proyecto' as NexusType,
-          'proyectos': 'Proyecto' as NexusType
-        };
+        const schemas = await db.getAllTypeSchemas();
+        const normalizedTypeInput = typeString.toLowerCase().trim();
 
-        objectType = typeMap[typeString.toLowerCase()] || NexusType.PAGE;
+        // 1. Try to find exact match in schemas (case-insensitive)
+        const matchedSchema = schemas.find(s =>
+          s.type.toLowerCase() === normalizedTypeInput
+        );
+
+        if (matchedSchema) {
+          objectType = matchedSchema.type as NexusType;
+        } else {
+          // 2. Check for Page alias
+          if (normalizedTypeInput === 'page') {
+            objectType = NexusType.PAGE;
+          } else {
+            // 3. Fallback: Use capitalized input as new type
+            // Capitalize first letter, keep rest as is (or lowercase? User asked for "Lugar" from "lugar")
+            // "el nombre del tipo en ajustes es en mayúsculas (Lugar)"
+            objectType = (typeString.charAt(0).toUpperCase() + typeString.slice(1).toLowerCase()) as NexusType;
+          }
+        }
       }
 
       // Load type schema to get default properties
