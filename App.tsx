@@ -25,6 +25,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { DatabaseErrorRecovery } from './components/DatabaseErrorRecovery';
 
 import EventDetailsModal from './components/Calendar/EventDetailsModal';
+import { formatHeaderDate } from './utils/dateUtils';
 import { CalendarEvent } from './services/calendarService';
 
 // Development helper: Expose db and gmailService to window for console testing
@@ -427,7 +428,7 @@ const App: React.FC = () => {
     : objects;
 
   const getHeaderTitle = () => {
-    if (currentView === 'dashboard') return `${t.welcome}, ${user.name.split(' ')[0]} `;
+    if (currentView === 'dashboard') return formatHeaderDate(new Date(), lang);
     if (currentView === 'graph') return t.knowledgeGraph;
     if (currentView === 'tasks') return lang === 'es' ? 'Tareas' : 'Tasks';
     if (currentView === 'calendar') return t.calendar;

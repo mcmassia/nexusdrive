@@ -376,7 +376,7 @@ class DriveService {
             console.log(`[DriveService] Fetching: https://www.googleapis.com/drive/v3/files/${fileId}`);
 
             // Get file metadata
-            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime,webViewLink,appProperties`;
+            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime,webViewLink,appProperties,headRevisionId`;
             const metaResponse = await this.fetchWithAuth(metaUrl);
             const fileData = await metaResponse.json();
 
@@ -471,7 +471,8 @@ class DriveService {
                 content: processedContent,
                 lastModified: new Date(fileData.modifiedTime),
                 driveFileId: fileData.id, // Update Drive file ID
-                driveWebViewLink: fileData.webViewLink // Map webViewLink
+                driveWebViewLink: fileData.webViewLink, // Map webViewLink
+                headRevisionId: fileData.headRevisionId // Store revision ID
             };
         }
 
@@ -485,7 +486,8 @@ class DriveService {
             tags: [],
             metadata: [],
             driveFileId: fileData.id,
-            driveWebViewLink: fileData.webViewLink // Map webViewLink
+            driveWebViewLink: fileData.webViewLink, // Map webViewLink
+            headRevisionId: fileData.headRevisionId // Store revision ID
         };
 
         return obj;
@@ -855,12 +857,12 @@ class DriveService {
     /**
      * Get file info without reading content
      */
-    async getFileInfo(fileId: string): Promise<{ id: string, name: string, mimeType: string, modifiedTime: string } | null> {
+    async getFileInfo(fileId: string): Promise<{ id: string, name: string, mimeType: string, modifiedTime: string, headRevisionId?: string } | null> {
         const token = authService.getAccessToken();
         if (!token) return null;
 
         try {
-            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime`;
+            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime,headRevisionId`;
             const response = await this.fetchWithAuth(metaUrl);
             return await response.json();
         } catch (error) {

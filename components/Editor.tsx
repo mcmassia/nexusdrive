@@ -3,7 +3,7 @@ import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
 import BacklinksPanel from './BacklinksPanel';
-import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
@@ -42,8 +42,55 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
     const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);
     const [availableTags, setAvailableTags] = useState<string[]>([]);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
     const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
+
+    // This useEffect block seems to be missing `editorRef` definition.
+    // Assuming `editorRef` is defined elsewhere in the component,
+    // or this block is intended to be placed differently.
+    // For now, I'll place it as requested, assuming `editorRef` exists.
+    // If `editorRef` is not defined, this will cause a runtime error.
+    // Given the context, it's likely `editorRef` would be a useRef for the RichEditor component.
+    // I will add a placeholder comment for `editorRef` if it's not present in the original code.
+    // (Upon reviewing the original code, `editorRef` is not present. I will omit this useEffect block
+    // as it would introduce an error, and the instruction seems to have a partial context for it.
+    // The core request is `isRefreshing` state and `handleManualRefresh`.)
+
+    const handleManualRefresh = async () => {
+        if (!currentObject?.id) return;
+        setIsRefreshing(true);
+        try {
+            console.log('[Editor] Manually refreshing object...');
+            await db.ensureFreshness(currentObject.id);
+            // Re-load object to ensure UI updates if ensureFreshness didn't trigger a prop update fast enough
+            // (Though prop update from App.tsx should handle it)
+            const freshObj = await db.getObjectById(currentObject.id);
+            if (freshObj) {
+                setCurrentObject(freshObj);
+                setContent(freshObj.content);
+            }
+        } catch (error) {
+            console.error('[Editor] Manual refresh failed:', error);
+        } finally {
+            setTimeout(() => setIsRefreshing(false), 500);
+        }
+    };
+
+    const handleExternalLink = (e: React.MouseEvent) => {
+        if (!currentObject.driveFileId && !currentObject.driveWebViewLink) {
+            e.preventDefault();
+            addNotification({
+                type: 'warning',
+                message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
+                description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
+                duration: 5000
+            });
+        } else {
+            const url = currentObject.driveWebViewLink || (currentObject.driveFileId ? `https://docs.google.com/document/d/${currentObject.driveFileId}/edit` : '#');
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    };
 
     const handleApplyTemplate = async (template: any) => {
         setIsTemplateMenuOpen(false);
@@ -444,38 +491,38 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             </div>
                         )}
 
-                        <a
-                            href={currentObject.driveWebViewLink || (currentObject.driveFileId ? `https://docs.google.com/document/d/${currentObject.driveFileId}/edit` : '#')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => {
-                                if (!currentObject.driveFileId && !currentObject.driveWebViewLink) {
-                                    e.preventDefault();
-                                    addNotification({
-                                        type: 'warning',
-                                        message: lang === 'es' ? 'Documento no sincronizado' : 'Document not synced',
-                                        description: lang === 'es' ? 'Guarda el documento para sincronizarlo con Drive.' : 'Save the document to sync with Drive.',
-                                        duration: 5000
-                                    });
-                                }
-                            }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
-                                ${(currentObject.driveFileId || currentObject.driveWebViewLink)
-                                    ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                    : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                }`}
-                            title="Open in Drive"
+                        <button
+                            onClick={handleManualRefresh}
+                            disabled={isRefreshing}
+                            className={`p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
+                            title={lang === 'es' ? 'Actualizar desde Drive' : 'Refresh from Drive'}
                         >
-                            <ExternalLink size={16} />
-                            <span className="hidden sm:inline">Drive</span>
-                        </a>
+                            <RefreshCw size={18} />
+                        </button>
 
                         <button
-                            onClick={handleSave}
-                            className="flex items-center gap-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
+                            onClick={handleExternalLink}
+                            className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                            title={lang === 'es' ? 'Abrir en Drive' : 'Open in Drive'}
                         >
-                            <Save size={16} />
-                            <span className="hidden sm:inline">{t.save}</span>
+                            <ExternalLink size={18} />
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span>{lang === 'es' ? 'Guardando...' : 'Saving...'}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} />
+                                    <span>{lang === 'es' ? 'Guardar' : 'Save'}</span>
+                                </>
+                            )}
                         </button>
 
                         <button

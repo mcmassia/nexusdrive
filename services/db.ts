@@ -583,6 +583,19 @@ class LocalDatabase {
   }
 
   /**
+   * Get count of synced Gmail messages
+   */
+  async getGmailMessageCount(): Promise<number> {
+    if (!this.db) return 0;
+    try {
+      return await this.db.count('gmail_messages');
+    } catch (error) {
+      console.error('[LocalDB] Error counting gmail messages:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Clear all objects from IndexedDB
    * Used for forcing a full sync
    */
@@ -654,15 +667,31 @@ class LocalDatabase {
     try {
       const fileInfo = await driveService.getFileInfo(localObj.driveFileId);
       if (fileInfo) {
-        const driveModified = new Date(fileInfo.modifiedTime).getTime();
-        const localModified = new Date(localObj.lastModified).getTime();
+        let shouldUpdate = false;
 
-        // 5 seconds grace period to prevent loop on just-saved files
-        // If Drive is significantly newer (someone else edited it, or edited on another device)
-        if (driveModified > localModified + 5000) {
-          console.log(`[LocalDB] 🔄 Freshness check: Drive version is newer for "${localObj.title}". Downloading...`);
-          console.log(`[LocalDB] Local: ${localObj.lastModified} vs Drive: ${fileInfo.modifiedTime}`);
+        // Critial Check: Revision ID
+        // If Drive has a revision ID and it differs from local, strictly update
+        if (fileInfo.headRevisionId) {
+          if (fileInfo.headRevisionId !== localObj.headRevisionId) {
+            console.log(`[LocalDB] 🔄 Freshness check: Revision mismatch (Local: ${localObj.headRevisionId}, Remote: ${fileInfo.headRevisionId}). Downloading...`);
+            shouldUpdate = true;
+          }
+        }
 
+        // Fallback Check: Timestamp (if no revision ID or for legacy support)
+        if (!shouldUpdate) {
+          const driveModified = new Date(fileInfo.modifiedTime).getTime();
+          const localModified = new Date(localObj.lastModified).getTime();
+
+          // 5 seconds grace period to prevent loop on just-saved files
+          // If Drive is significantly newer (someone else edited it, or edited on another device)
+          if (driveModified > localModified + 5000) {
+            console.log(`[LocalDB] 🔄 Freshness check: Drive timestamp is newer for "${localObj.title}". Downloading...`);
+            shouldUpdate = true;
+          }
+        }
+
+        if (shouldUpdate) {
           const updatedObj = await driveService.readObject(localObj.driveFileId);
           if (updatedObj) {
             // Preserve local ID but take content from Drive

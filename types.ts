@@ -94,6 +94,7 @@ export interface NexusObject {
   pinned?: boolean;
   aliases?: string[]; // Alternative names/terms for this document
   isStub?: boolean; // If true, content is missing and needs to be fetched from Drive
+  headRevisionId?: string; // Google Drive revision ID for strict version control
 }
 
 export interface GraphNode extends SimulationNodeDatum {

@@ -28,7 +28,8 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [syncedCount, setSyncedCount] = useState(0);
     const [emailToDelete, setEmailToDelete] = useState<string | null>(null);
     const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
     const [accountMap, setAccountMap] = useState<Record<string, { color: string, name: string }>>({});
@@ -81,6 +82,8 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
         try {
             const messages = await db.getGmailMessages(20); // Increased limit to see more
             setEmails(messages as EmailPreview[]);
+            const total = await db.getGmailMessageCount();
+            setSyncedCount(total);
         } catch (err) {
             console.error('Error loading emails:', err);
             setError(lang === 'es' ? 'Error al cargar correos' : 'Error loading emails');
@@ -425,10 +428,9 @@ const EmailsPanel: React.FC<EmailsPanelProps> = ({ lang, onNavigate }) => {
             {/* Footer */}
             {emails.length > 0 && !isCollapsed && (
                 <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                        {lang === 'es'
-                            ? `Mostrando ${emails.length} correos recientes`
-                            : `Showing ${emails.length} recent emails`}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center flex justify-between">
+                        <span>{lang === 'es' ? `Sincronizados: ${syncedCount}` : `Synced: ${syncedCount}`}</span>
+                        <span>{lang === 'es' ? `Visualizando: ${emails.length}` : `Visualizing: ${emails.length}`}</span>
                     </p>
                 </div>
             )}
