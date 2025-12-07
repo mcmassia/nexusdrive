@@ -579,33 +579,36 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                             }}
                         />
                     </div>
+
+                    {/* BACKLINKS PANEL: Moved inside scrollable area */}
+                    <div className="mt-8 pb-12">
+                        <BacklinksPanel
+                            targetDocId={currentObject.id}
+                            onNavigate={async (docId, blockId) => {
+                                const obj = objects.find(o => o.id === docId);
+                                if (obj) {
+                                    // Await save to prevent state reversion race condition
+                                    await handleSave();
+
+                                    if (onNavigate) {
+                                        onNavigate(obj);
+                                    } else {
+                                        onSave(obj);
+                                    }
+
+                                    // Optional: Scroll to specific block if blockId is provided
+                                    if (blockId) {
+                                        console.log('Navigating to block:', blockId);
+                                    }
+                                }
+                            }}
+                            lang={lang}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* BACKLINKS PANEL: Full width below editor */}
-            <BacklinksPanel
-                targetDocId={currentObject.id}
-                onNavigate={async (docId, blockId) => {
-                    const obj = objects.find(o => o.id === docId);
-                    if (obj) {
-                        // Await save to prevent state reversion race condition
-                        await handleSave();
 
-                        if (onNavigate) {
-                            onNavigate(obj);
-                        } else {
-                            onSave(obj);
-                        }
-
-                        // Optional: Scroll to specific block if blockId is provided
-                        // This would require passing blockId to the new view state or handling it in App.tsx
-                        if (blockId) {
-                            console.log('Navigating to block:', blockId);
-                        }
-                    }
-                }}
-                lang={lang}
-            />
         </div >
     );
 };
