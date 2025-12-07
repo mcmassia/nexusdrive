@@ -129,6 +129,14 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
             });
         }
 
+        // Ensure freshness if we have a connection
+        if (object.driveFileId) {
+            // Fire and forget - if it finds a newer version, it will update DB,
+            // which triggers App.tsx to update props, which triggers this effect again (with fresh data)
+            console.log('[Editor] Checking freshness for:', object.title);
+            db.ensureFreshness(object.id);
+        }
+
         // Load type schema for this object type
         db.getAllTypeSchemas().then(schemas => {
             setAvailableSchemas(schemas);

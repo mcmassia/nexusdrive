@@ -855,12 +855,12 @@ class DriveService {
     /**
      * Get file info without reading content
      */
-    async getFileInfo(fileId: string): Promise<{ id: string, name: string, mimeType: string } | null> {
+    async getFileInfo(fileId: string): Promise<{ id: string, name: string, mimeType: string, modifiedTime: string } | null> {
         const token = authService.getAccessToken();
         if (!token) return null;
 
         try {
-            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType`;
+            const metaUrl = `${this.baseUrl}/files/${fileId}?fields=id,name,mimeType,modifiedTime`;
             const response = await this.fetchWithAuth(metaUrl);
             return await response.json();
         } catch (error) {

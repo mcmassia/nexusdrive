@@ -641,6 +641,56 @@ class LocalDatabase {
     }
   }
 
+  /**
+   * Ensure the local object is fresh by comparing modifiedTime with Drive
+   * Returns the updated object if a newer version was found, otherwise the local object.
+   */
+  async ensureFreshness(id: string): Promise<NexusObject | null> {
+    const localObj = await this.getObjectById(id, true);
+    if (!localObj || !localObj.driveFileId || authService.isInDemoMode()) {
+      return localObj;
+    }
+
+    try {
+      const fileInfo = await driveService.getFileInfo(localObj.driveFileId);
+      if (fileInfo) {
+        const driveModified = new Date(fileInfo.modifiedTime).getTime();
+        const localModified = new Date(localObj.lastModified).getTime();
+
+        // 5 seconds grace period to prevent loop on just-saved files
+        // If Drive is significantly newer (someone else edited it, or edited on another device)
+        if (driveModified > localModified + 5000) {
+          console.log(`[LocalDB] 🔄 Freshness check: Drive version is newer for "${localObj.title}". Downloading...`);
+          console.log(`[LocalDB] Local: ${localObj.lastModified} vs Drive: ${fileInfo.modifiedTime}`);
+
+          const updatedObj = await driveService.readObject(localObj.driveFileId);
+          if (updatedObj) {
+            // Preserve local ID but take content from Drive
+            const merged: NexusObject = {
+              ...updatedObj,
+              id: localObj.id,
+              driveFileId: localObj.driveFileId,
+              driveWebViewLink: fileInfo.id ? `https://docs.google.com/document/d/${fileInfo.id}/edit` : undefined
+            };
+
+            // Direct PUT to avoid triggering sync loop
+            if (this.db) {
+              await this.db.put('objects', merged);
+              console.log(`[LocalDB] ✅ Freshness check: Updated local cache for "${merged.title}"`);
+              return merged;
+            }
+          }
+        } else {
+          console.log(`[LocalDB] Freshness check: Local version is up to date for "${localObj.title}".`);
+        }
+      }
+    } catch (e) {
+      console.error('[LocalDB] Freshness check failed:', e);
+    }
+
+    return localObj;
+  }
+
   async getGraphData(): Promise<{ nodes: GraphNode[]; links: GraphLink[] }> {
     const objects = await this.getObjects();
     const nodes: GraphNode[] = objects.map(obj => ({

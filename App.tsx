@@ -240,6 +240,19 @@ const App: React.FC = () => {
     };
   }, [user, currentView]); // Re-run if user changes. currentView added to potentially refresh if needed, though maybe not strictly necessary for the interval setup itself.
 
+  // Keep selectedObject in sync with objects list (for background updates)
+  useEffect(() => {
+    if (selectedObject) {
+      const updated = objects.find(o => o.id === selectedObject.id);
+      if (updated && updated !== selectedObject) {
+        // Only update if content or metadata actually changed to avoid re-renders?
+        // For now, strict identity check is safer to ensure latest version
+        console.log('[App] Auto-updating selectedObject from fresh data:', updated.title);
+        setSelectedObject(updated);
+      }
+    }
+  }, [objects]); // Intentionally verify against latest objects list
+
   // Handle Dark Mode Class
   useEffect(() => {
     if (isDarkMode) {
