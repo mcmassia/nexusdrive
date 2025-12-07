@@ -3,11 +3,12 @@ import { NexusObject, NexusType, TypeSchema } from '../types';
 import MetadataTable from './MetadataTable';
 import RichEditor from './RichEditor';
 import BacklinksPanel from './BacklinksPanel';
-import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, Trash2, MoreVertical, Share2, Calendar, Clock, Tag, Pin, X, LayoutTemplate, ExternalLink, RefreshCw, Loader2, FileText, Brain } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/geminiService';
 import { TRANSLATIONS } from '../constants';
 import { useNotification } from './NotificationContext';
+import AnalysisModal from './AnalysisModal';
 
 interface EditorProps {
     object: NexusObject;
@@ -45,6 +46,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
     const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
+    const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
 
     // This useEffect block seems to be missing `editorRef` definition.
     // Assuming `editorRef` is defined elsewhere in the component,
@@ -308,34 +310,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
         setTimeout(() => setIsSaving(false), 500);
     };
 
-    const handleAutoTag = async () => {
-        if (!content || content.trim().length === 0) {
-            alert(lang === 'es' ? 'Escribe algo de contenido primero' : 'Write some content first');
-            return;
-        }
 
-        setIsSaving(true);
-        try {
-            const plainText = content.replace(/<[^>]*>?/gm, ' ');
-            console.log('[Editor] Calling autoTagContent with:', plainText.substring(0, 100) + '...');
-            const newTags = await geminiService.autoTagContent(plainText);
-            console.log('[Editor] Received tags:', newTags);
-
-            if (newTags.length > 0) {
-                setCurrentObject(prev => ({ ...prev, tags: [...new Set([...prev.tags, ...newTags])] }));
-                alert(lang === 'es'
-                    ? `${newTags.length} etiquetas sugeridas agregadas`
-                    : `${newTags.length} suggested tags added`);
-            } else {
-                alert(lang === 'es' ? 'No se pudieron generar etiquetas' : 'Could not generate tags');
-            }
-        } catch (error) {
-            console.error('[Editor] Auto-tag error:', error);
-            alert(lang === 'es' ? 'Error al generar etiquetas' : 'Error generating tags');
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     const { confirm } = useNotification();
 
@@ -366,6 +341,16 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right-10 duration-200 transition-colors">
+            {isAnalysisOpen && (
+                <AnalysisModal
+                    object={currentObject}
+                    onClose={() => setIsAnalysisOpen(false)}
+                    onNavigate={(obj) => {
+                        if (onNavigate) onNavigate(obj);
+                    }}
+                    lang={lang}
+                />
+            )}
             {/* Toolbar - Split into 2 rows */}
             <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 transition-colors flex flex-col">
                 {/* Row 1: Title & Context */}
@@ -437,12 +422,12 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
 
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={handleAutoTag}
+                            onClick={() => setIsAnalysisOpen(true)}
                             className="flex items-center gap-2 px-3 py-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors text-sm font-medium"
-                            title="AI Auto-Tag"
+                            title={lang === 'es' ? "Analizar y Resumir" : "Analyze and Summarize"}
                         >
-                            <Sparkles size={16} />
-                            <span className="hidden sm:inline">Auto-Tag</span>
+                            <Brain size={16} />
+                            <span className="hidden sm:inline">{lang === 'es' ? 'Analizar' : 'Analyze'}</span>
                         </button>
 
                         <button
@@ -510,17 +495,17 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md font-medium transition-colors ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
                         >
                             {isSaving ? (
                                 <>
                                     <Loader2 size={16} className="animate-spin" />
-                                    <span>{lang === 'es' ? 'Guardando...' : 'Saving...'}</span>
+                                    <span className="hidden sm:inline">{lang === 'es' ? 'Guardando...' : 'Saving...'}</span>
                                 </>
                             ) : (
                                 <>
                                     <Save size={16} />
-                                    <span>{lang === 'es' ? 'Guardar' : 'Save'}</span>
+                                    <span className="hidden sm:inline">{lang === 'es' ? 'Guardar' : 'Save'}</span>
                                 </>
                             )}
                         </button>

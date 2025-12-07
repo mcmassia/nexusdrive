@@ -447,6 +447,74 @@ Return JSON with this EXACT structure:
       };
     }
   }
+
+  async generateContextQuery(content: string): Promise<string> {
+    if (!this.isConfigured || !this.ai) return "";
+
+    try {
+      const prompt = `
+      Analyze the following document content and generate a specific search query to find related information in a knowledge base.
+      The query should focus on the main entities, topics, or questions raised in the text.
+      Return ONLY the query string, nothing else.
+      
+      Content: "${content.substring(0, 2000)}"
+      `;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+      });
+
+      return response.text?.trim() || "";
+    } catch (error) {
+      console.warn("Error generating context query:", error);
+      return "";
+    }
+  }
+
+  async enrichDocument(content: string, contextCandidates: any[], lang: 'en' | 'es' = 'en'): Promise<string> {
+    if (API_KEY === 'DEMO_KEY' || !this.ai) {
+      return lang === 'es' ? "Modo demo: Análisis simulado." : "Demo mode: Simulated analysis.";
+    }
+
+    try {
+      const contextString = contextCandidates.map((c, i) => `ID: ${c.id} | Title: ${c.title} (${c.type}): ${c.content.substring(0, 300)}...`).join('\n');
+
+      const prompt = `
+      You are an expert analyst. Your task is to summarize the provided document content and enrich it with insights from the related context found in the database.
+      
+      Target Document Content:
+      "${content.substring(0, 3000)}"
+      
+      Related Database Context:
+      ${contextString}
+      
+      Instructions:
+      1. Summarize the main points of the Target Document.
+      2. Cross-reference with the Related Context to add value.
+      3. **CRITICAL: CITATIONS & LINKS**: When referring to a specific document from the context, YOU MUST create a clickable HTML link using its ID.
+         Format: <a data-object-id="THE_ID_FROM_CONTEXT" class="nexus-mention">Document Title</a>
+         Example: "This is discussed in <a data-object-id="123" class="nexus-mention">Project Alpha</a>."
+         DO NOT use bracketed numbers like [1] or [74]. Use the Document Title as the link text.
+      4. **CRITICAL: FORMATTING**: 
+         - Output PURE HTML only. 
+         - DO NOT use Markdown formatting (no **bold**, no *italic*, no \`code\`). 
+         - Use HTML tags: <strong> for bold, <em> for italic, <ul>/<li> for lists, <h3> for headings.
+         - Do not wrap the output in \`\`\`html \`\`\`. Just return the raw HTML.
+      5. ${lang === 'es' ? 'RESPOND IN SPANISH.' : 'RESPOND IN ENGLISH.'}
+      `;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+      });
+
+      return response.text || "";
+    } catch (error) {
+      console.error("Error enriching document:", error);
+      return lang === 'es' ? "Error al generar el análisis." : "Error generating analysis.";
+    }
+  }
 }
 
 export const geminiService = new GeminiService();
