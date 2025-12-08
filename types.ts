@@ -14,7 +14,7 @@ export interface NexusProperty {
   key: string;
   label: string;
   value: string | string[]; // string[] for document lists or multiselect
-  type: 'text' | 'number' | 'date' | 'document' | 'documents' | 'multiselect' | 'select' | 'url' | 'email' | 'phone' | 'checkbox' | 'image';
+  type: PropertyType;
   allowedTypes?: NexusType[]; // For document/documents type
   options?: string[]; // For multiselect/select type
 }

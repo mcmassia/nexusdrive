@@ -15,6 +15,7 @@
     "@zip.js/zip.js": "^2.8.11",
     "d3": "^7.9.0",
     "firebase": "^12.6.0",
+    "highlight.js": "^11.11.1",
     "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.554.0",

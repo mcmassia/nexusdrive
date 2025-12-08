@@ -3,6 +3,8 @@ import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Heading1, He
 import { db } from '../services/db';
 import { NexusObject, NexusType, TagConfig } from '../types';
 import { useSettings } from './SettingsContext';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/atom-one-dark.css';
 
 interface RichEditorProps {
   initialContent: string;
@@ -646,6 +648,55 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       }
     };
   }, [initialContent, isUserEditing, allObjects]);
+
+  // Syntax Highlighting Management (Highlight on Blur, Plain on Focus)
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // Initial highlight of all blocks
+    editor.querySelectorAll('pre').forEach(block => {
+      hljs.highlightElement(block as HTMLElement);
+    });
+
+    const handleFocusCapture = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if entering a PRE block
+      const pre = target.closest('pre');
+      if (pre) {
+        // Strip formatting to allow editing raw text
+        // We use textContent to get plain text, effectively removing all hljs spans
+        if (pre.classList.contains('hljs')) {
+          const rawText = pre.textContent || '';
+          pre.innerText = rawText; // innerText preserves newlines better than textContent sometimes, but textContent is standard.
+          // Highlight.js adds 'hljs' class. We remove it to mark it as "raw".
+          pre.classList.remove('hljs');
+          // Remove specific language class if we want re-detection, or keep it?
+          // Re-detection is safer if user changes code.
+          pre.removeAttribute('data-highlighted');
+        }
+      }
+    };
+
+    const handleBlurCapture = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      const pre = target.closest('pre');
+      if (pre) {
+        // Apply highlighting
+        // hljs.highlightElement automagically detects language if not specified
+        hljs.highlightElement(pre as HTMLElement);
+      }
+    };
+
+    // Use capture to detect focus/blur events deep in the contentEditable
+    editor.addEventListener('focus', handleFocusCapture, true);
+    editor.addEventListener('blur', handleBlurCapture, true);
+
+    return () => {
+      editor.removeEventListener('focus', handleFocusCapture, true);
+      editor.removeEventListener('blur', handleBlurCapture, true);
+    };
+  }, []);
 
   // Intercept all link clicks (generic)
   useEffect(() => {
