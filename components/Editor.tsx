@@ -582,9 +582,10 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
                                     [&_ul]:!text-slate-900
                                     [&_ol]:!text-slate-900
                                     [&_blockquote]:!text-slate-700 [&_blockquote]:!border-l-4 [&_blockquote]:!border-slate-300 [&_blockquote]:!pl-4 [&_blockquote]:!italic
-                                    [&_code]:!bg-slate-100 [&_code]:!text-pink-600 [&_code]:!px-1 [&_code]:!rounded
-                                    [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
-                                    [&_pre]:!bg-slate-100 [&_pre]:!p-4 [&_pre]:!rounded-lg
+                                    [&_code]:!px-1 [&_code]:!rounded [&_code]:!font-mono
+                                    [&_:not(pre)>code]:!bg-slate-100 [&_:not(pre)>code]:!text-pink-600
+                                    [&_pre]:!bg-[#282c34] [&_pre]:!text-slate-200 [&_pre]:!p-4 [&_pre]:!rounded-lg
+                                    [&_pre_code]:!bg-transparent [&_pre_code]:!p-0 [&_pre_code]:!text-inherit
                                     [&_a]:underline
                                 "
                             onTagClick={onTagClick}
