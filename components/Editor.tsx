@@ -34,11 +34,7 @@ const Editor: React.FC<EditorProps> = ({ object, onSave, onClose, onDelete, lang
     // Sync state with prop changes (e.g. after external save/sync)
     useEffect(() => {
         setCurrentObject(object);
-        // Only update content if it's different to avoid losing unsaved changes?
-        // Actually, if the parent updates the object, we should probably reflect it, 
-        // but we must be careful not to overwrite user typing if the update comes from a background sync.
-        // However, in this context, the update comes from `onSave` completion in App.tsx which updates `selectedObject`.
-        // So it is safe to update `currentObject` here.
+        setContent(object.content);
     }, [object]);
 
     const [availableSchemas, setAvailableSchemas] = useState<TypeSchema[]>([]);

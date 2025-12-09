@@ -734,8 +734,16 @@ class LocalDatabase {
     const links: GraphLink[] = [];
     const nodeIds = new Set(nodes.map(n => n.id)); // Valid node IDs
 
+    // Create a map of Drive File ID -> Object ID for faster lookup
+    const driveIdToObjId = new Map<string, string>();
+    objects.forEach(obj => {
+      if (obj.driveFileId) {
+        driveIdToObjId.set(obj.driveFileId, obj.id);
+      }
+    });
+
     for (const obj of objects) {
-      // Parse content for mentions (data-object-id)
+      // 1. Parse content for mentions (data-object-id) - The standard way
       const mentionRegex = /data-object-id="([^"]+)"/g;
       let match;
       while ((match = mentionRegex.exec(obj.content)) !== null) {
@@ -750,7 +758,27 @@ class LocalDatabase {
         }
       }
 
-      // Also check for old-style data-id links
+      // 2. Fallback: Parse for raw Drive Links (unhydrated mentions)
+      // Matches: docs.google.com/document/d/FILE_ID/...
+      const driveLinkRegex = /docs\.google\.com\/document\/d\/([a-zA-Z0-9-_]+)/g;
+      while ((match = driveLinkRegex.exec(obj.content)) !== null) {
+        const driveId = match[1];
+        const targetObjId = driveIdToObjId.get(driveId);
+
+        if (targetObjId && nodeIds.has(targetObjId)) {
+          // Avoid duplicate links if it's arguably the same mention (e.g. if the link has both class and href)
+          // But since data-object-id is usually removed or handled by the first regex, this catches "raw" <a> tags
+          // We can check if we already added a link to this target from this source?
+          // Graph handling usually ignores dupes or we can filter later.
+          links.push({
+            source: obj.id,
+            target: targetObjId,
+            type: 'mention'
+          });
+        }
+      }
+
+      // 3. Also check for old-style data-id links
       const linkRegex = /data-id="([^"]+)"/g;
       while ((match = linkRegex.exec(obj.content)) !== null) {
         const targetId = match[1];
@@ -787,10 +815,22 @@ class LocalDatabase {
           }
         }
       }
-    } // This brace was missing, closing the 'for (const obj of objects)' loop.
+    }
 
-    console.log(`[LocalDB] Graph: ${nodes.length} nodes, ${links.length} valid links`);
-    return { nodes, links };
+    // Deduplicate links
+    const uniqueLinks: GraphLink[] = [];
+    const linkSet = new Set<string>();
+
+    links.forEach(link => {
+      const key = `${link.source}-${link.target}-${link.type}`;
+      if (!linkSet.has(key)) {
+        linkSet.add(key);
+        uniqueLinks.push(link);
+      }
+    });
+
+    console.log(`[LocalDB] Graph: ${nodes.length} nodes, ${uniqueLinks.length} valid links`);
+    return { nodes, links: uniqueLinks };
   }
 
   async getBacklinksWithContext(targetDocId: string): Promise<BacklinkContext[]> {
@@ -808,7 +848,23 @@ class LocalDatabase {
         const htmlDoc = parser.parseFromString(doc.content, 'text/html');
 
         // Find all mentions of the target document
-        const mentions = htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`);
+        // 1. Standard hydration: data-object-id
+        const mentions = Array.from(htmlDoc.querySelectorAll(`[data-object-id="${targetDocId}"]`));
+
+        // 2. Fallback: Raw Drive links (unhydrated)
+        // We need the Drive ID of the target document to match
+        const targetObj = await this.getObjectById(targetDocId);
+        if (targetObj && targetObj.driveFileId) {
+          const driveId = targetObj.driveFileId;
+          // Select all <a> tags
+          const allLinks = Array.from(htmlDoc.querySelectorAll('a'));
+          // Filter those that contain the drive ID in href
+          const unhydrated = allLinks.filter(a => {
+            const href = a.getAttribute('href');
+            return href && href.includes(`/d/${driveId}`) && !a.hasAttribute('data-object-id');
+          });
+          mentions.push(...unhydrated);
+        }
 
         mentions.forEach((mention, index) => {
           // Get parent block (paragraph, list item, div, heading)

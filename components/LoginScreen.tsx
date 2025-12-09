@@ -20,6 +20,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ lang = 'en', setLang }) => {
     authService.login();
   };
 
+  const handleDemoLogin = () => {
+    authService.loginDemo();
+  };
+
   const t = TRANSLATIONS[lang];
 
   return (
@@ -91,7 +95,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ lang = 'en', setLang }) => {
             </div>
 
             <button
-              onClick={handleLogin}
+              onClick={handleDemoLogin}
               className="w-full flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium py-2.5 px-4 rounded-lg transition-all text-sm"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

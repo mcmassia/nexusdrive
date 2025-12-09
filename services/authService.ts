@@ -98,6 +98,8 @@ class AuthService {
         this.initializeTokenClient();
       } else {
         console.error("Google scripts not loaded yet");
+        // Fallback to demo in dev if scripts fail?
+        // this.mockLogin();
         return;
       }
     }
@@ -111,6 +113,11 @@ class AuthService {
         this.mockLogin();
       }
     }
+  }
+
+  loginDemo() {
+    this.isDemoMode = true;
+    this.mockLogin();
   }
 
   logout() {

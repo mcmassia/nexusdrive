@@ -19,9 +19,15 @@ interface RichEditorProps {
 const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMentionClick, onTagClick, allObjects, className = '', style = {} }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
+  const isLocked = useRef(false);
 
   // Settings
   const { isFeatureEnabled } = useSettings();
+
+  // ... (menu state)
+
+  // Only update content if significantly different AND user is not actively editing
+
 
   // Menu State
   const [menuOpen, setMenuOpen] = useState(false);
@@ -45,6 +51,22 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
       timeout = setTimeout(() => func(...args), wait);
     };
   };
+
+  // Only update content if significantly different AND user is not actively editing
+  useEffect(() => {
+    if (isUserEditing || isLocked.current) {
+      return;
+    }
+
+    if (editorRef.current && initialContent && editorRef.current.innerHTML !== initialContent) {
+      const currentLength = editorRef.current.innerHTML.length;
+      const newLength = initialContent.length;
+
+      if (currentLength === 0 || Math.abs(currentLength - newLength) > 100) {
+        editorRef.current.innerHTML = initialContent;
+      }
+    }
+  }, [initialContent, isUserEditing]);
 
 
 
@@ -119,7 +141,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   // Only update content if significantly different AND user is not actively editing
   useEffect(() => {
-    if (isUserEditing) {
+    if (isUserEditing || isLocked.current) {
       return;
     }
 
@@ -278,14 +300,20 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
   const insertMention = async (obj: NexusObject) => {
     const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) return;
+    if (!selection || !selection.rangeCount) {
+      return;
+    }
 
     const range = selection.getRangeAt(0);
     const textNode = range.startContainer;
 
+    if (!textNode) {
+      return;
+    }
+
     // Save the position before modification
     let insertPosition = range.startOffset;
-    let parentNode = textNode.parentNode;
+    let parentNode = textNode.parentNode; // This variable is not used in the new logic, but kept for consistency if other parts rely on it.
 
     // Remove the @ and query text
     if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
@@ -429,6 +457,11 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
 
     setMenuOpen(false);
 
+    // Force user editing state to prevent external updates (stale initialContent) 
+    // from overwriting our new DOM state before the round-trip update
+    isLocked.current = true;
+    setTimeout(() => { isLocked.current = false; }, 2000);
+
     if (editorRef.current) {
       editorRef.current.focus();
       onChange(editorRef.current.innerHTML);
@@ -569,6 +602,8 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
     const processContent = async () => {
       if (!editorRef.current) return;
 
+      let hasChanges = false;
+
       // 1. Resolve Asset URLs (Images)
       const images = editorRef.current.querySelectorAll('img');
       images.forEach(async (img) => {
@@ -608,6 +643,7 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
                 link.dataset.objectId = obj.id;
                 link.dataset.objectType = obj.type;
                 // We keep the href as is for fallback, but click handler will intercept
+                hasChanges = true;
               }
             }
           }
@@ -629,8 +665,14 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
           (mention as HTMLElement).style.textDecoration = 'underline';
           (mention as HTMLElement).style.cursor = 'pointer';
           (mention as HTMLElement).style.fontWeight = '500';
+          // Style changes are visual, we don't strictly need to force save for them, 
+          // but saving hydration is critical.
         }
       });
+
+      if (hasChanges) {
+        onChange(editorRef.current.innerHTML);
+      }
     };
 
     processContent();
@@ -1364,6 +1406,10 @@ const RichEditor: React.FC<RichEditorProps> = ({ initialContent, onChange, onMen
               if (e.key === 'Escape') {
                 setLinkModalOpen(false);
                 setSavedSelection(null);
+                isLocked.current = true;
+                setTimeout(() => {
+                  isLocked.current = false;
+                }, 2000);
               }
             }}
             placeholder="https://example.com"
